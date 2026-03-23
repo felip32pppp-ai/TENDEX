@@ -1,4 +1,4 @@
-MOVO:minhaSenha123
+LAYLA:123
 admin:123456
 # este é um comentário
 usuario_teste:teste
