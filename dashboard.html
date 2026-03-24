@@ -1,37 +1,709 @@
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-    <meta charset="UTF-8">
-    <title>Dashboard - Em construção</title>
-    <style>
-        body {
-            font-family: system-ui;
-            background: #f4f6fa;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            text-align: center;
-        }
-        .container {
-            background: white;
-            padding: 2rem;
-            border-radius: 2rem;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-        }
-        a {
-            color: #1e4a76;
-            text-decoration: none;
-            font-weight: bold;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard | Cadastro de Itens com PDF</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: system-ui, 'Segoe UI', 'Inter', sans-serif;
+    }
+
+    body {
+      background: #f3f6fc;
+      padding: 2rem 1.5rem;
+    }
+
+    /* cabeçalho */
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 2px solid #cbd5e1;
+    }
+
+    .dashboard-header h1 {
+      font-size: 1.8rem;
+      background: linear-gradient(135deg, #0f2b3d, #1e4a76);
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+
+    .logout-btn {
+      background: #ef4444;
+      color: white;
+      border: none;
+      padding: 0.5rem 1.2rem;
+      border-radius: 2rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .logout-btn:hover {
+      background: #dc2626;
+      transform: scale(0.97);
+    }
+
+    /* grid de itens */
+    .items-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+
+    /* card do item */
+    .item-card {
+      background: white;
+      border-radius: 1.5rem;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+      overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+      border: 1px solid #e2edff;
+    }
+
+    .item-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+    }
+
+    .item-header {
+      background: #f8fafc;
+      padding: 1rem 1.2rem;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .item-info h3 {
+      font-size: 1.2rem;
+      color: #0f172a;
+    }
+
+    .item-info p {
+      font-size: 0.8rem;
+      color: #4b5563;
+      margin-top: 0.2rem;
+    }
+
+    .delete-item {
+      background: none;
+      border: none;
+      font-size: 1.3rem;
+      cursor: pointer;
+      color: #94a3b8;
+      transition: 0.2s;
+      padding: 0.3rem;
+      border-radius: 50%;
+    }
+
+    .delete-item:hover {
+      color: #dc2626;
+      background: #fee2e2;
+    }
+
+    /* área de anexos */
+    .attachments-area {
+      padding: 1rem 1.2rem;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .attachments-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #5b6e8c;
+      margin-bottom: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .pdf-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.7rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .pdf-badge {
+      background: #f1f5f9;
+      border-radius: 2rem;
+      padding: 0.4rem 0.9rem;
+      font-size: 0.75rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: 0.1s;
+      max-width: 200px;
+      word-break: break-all;
+    }
+
+    .pdf-badge a {
+      text-decoration: none;
+      color: #1e4a76;
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .pdf-badge a:hover {
+      text-decoration: underline;
+    }
+
+    .remove-pdf {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      color: #94a3b8;
+      padding: 0 0.2rem;
+      border-radius: 50%;
+    }
+
+    .remove-pdf:hover {
+      color: #ef4444;
+    }
+
+    .add-pdf-btn {
+      background: #eef2ff;
+      border: none;
+      border-radius: 2rem;
+      padding: 0.3rem 0.8rem;
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: #1e4a76;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      transition: 0.2s;
+    }
+
+    .add-pdf-btn:hover {
+      background: #d9e6ff;
+    }
+
+    /* botão flutuante + */
+    .fab {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: linear-gradient(135deg, #0f2b3d, #1e4a76);
+      color: white;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+      cursor: pointer;
+      transition: 0.2s;
+      border: none;
+      z-index: 10;
+    }
+
+    .fab:hover {
+      transform: scale(1.05);
+      background: linear-gradient(135deg, #1e3a5f, #0f2b3d);
+    }
+
+    /* modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: white;
+      max-width: 500px;
+      width: 90%;
+      border-radius: 1.5rem;
+      padding: 1.5rem;
+      box-shadow: 0 25px 40px rgba(0,0,0,0.2);
+      animation: fadeUp 0.2s;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px);}
+      to { opacity: 1; transform: translateY(0);}
+    }
+
+    .modal-content h2 {
+      margin-bottom: 1rem;
+      color: #0f172a;
+    }
+
+    .modal-content input, .modal-content input[type="file"] {
+      width: 100%;
+      padding: 0.7rem;
+      margin-bottom: 1rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 1rem;
+      font-size: 0.9rem;
+    }
+
+    .modal-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.8rem;
+      margin-top: 0.5rem;
+    }
+
+    .modal-buttons button {
+      padding: 0.5rem 1.2rem;
+      border-radius: 2rem;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .btn-save {
+      background: #1e4a76;
+      color: white;
+    }
+
+    .btn-cancel {
+      background: #e2e8f0;
+      color: #1e293b;
+    }
+
+    .empty-state {
+      text-align: center;
+      color: #6c86a3;
+      margin-top: 4rem;
+      font-size: 1rem;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📋 Painel em desenvolvimento</h1>
-        <p>Esta página será implementada futuramente.</p>
-        <p><a href="index.html">← Voltar ao login</a></p>
+
+<div class="dashboard-header">
+  <h1>📦 Cadastro de Itens com PDF</h1>
+  <button class="logout-btn" id="logoutBtn">Sair</button>
+</div>
+
+<div id="itemsContainer" class="items-grid">
+  <!-- itens serão renderizados aqui via JS -->
+</div>
+
+<button class="fab" id="addItemBtn">+</button>
+
+<!-- Modal para adicionar novo item -->
+<div id="itemModal" class="modal">
+  <div class="modal-content">
+    <h2>➕ Novo Item</h2>
+    <input type="text" id="itemName" placeholder="Nome do item" autocomplete="off">
+    <input type="text" id="itemId" placeholder="ID (ex: ITEM-001)" autocomplete="off">
+    <label style="font-size:0.8rem; color:#475569;">📎 Anexar PDF(s) (múltiplos)</label>
+    <input type="file" id="pdfFiles" multiple accept=".pdf">
+    <div class="modal-buttons">
+      <button class="btn-cancel" id="closeModalBtn">Cancelar</button>
+      <button class="btn-save" id="saveItemBtn">Salvar</button>
     </div>
+  </div>
+</div>
+
+<!-- Modal para adicionar PDF a um item existente -->
+<div id="pdfModal" class="modal">
+  <div class="modal-content">
+    <h2>📄 Adicionar PDF</h2>
+    <p id="pdfModalItemName" style="margin-bottom: 1rem; font-weight:500;"></p>
+    <input type="file" id="extraPdfFiles" multiple accept=".pdf">
+    <div class="modal-buttons">
+      <button class="btn-cancel" id="closePdfModalBtn">Cancelar</button>
+      <button class="btn-save" id="savePdfBtn">Adicionar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ==================== INDEXEDDB SETUP ====================
+  const DB_NAME = 'ItemPDFDB';
+  const DB_VERSION = 2;
+  const STORE_ITEMS = 'items';
+  const STORE_ATTACHMENTS = 'attachments'; // cada anexo com itemId, fileId, name, blob
+
+  let db = null;
+
+  function openDB() {
+    return new Promise((resolve, reject) => {
+      if (db && db.name === DB_NAME) {
+        resolve(db);
+        return;
+      }
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onerror = (e) => reject(request.error);
+      request.onsuccess = (e) => {
+        db = request.result;
+        resolve(db);
+      };
+      request.onupgradeneeded = (e) => {
+        const dbUp = e.target.result;
+        if (!dbUp.objectStoreNames.contains(STORE_ITEMS)) {
+          dbUp.createObjectStore(STORE_ITEMS, { keyPath: 'id', autoIncrement: true });
+        }
+        if (!dbUp.objectStoreNames.contains(STORE_ATTACHMENTS)) {
+          const attachmentStore = dbUp.createObjectStore(STORE_ATTACHMENTS, { keyPath: 'fileId', autoIncrement: true });
+          attachmentStore.createIndex('by_itemId', 'itemId', { unique: false });
+        }
+      };
+    });
+  }
+
+  // salvar item + seus anexos iniciais (blobs)
+  async function saveItemWithAttachments(itemName, itemIdCode, files) {
+    const dbConn = await openDB();
+    const transaction = dbConn.transaction([STORE_ITEMS, STORE_ATTACHMENTS], 'readwrite');
+    const itemsStore = transaction.objectStore(STORE_ITEMS);
+    const attachmentsStore = transaction.objectStore(STORE_ATTACHMENTS);
+    
+    // cria item
+    const newItem = {
+      name: itemName.trim(),
+      code: itemIdCode.trim(),
+      createdAt: new Date().toISOString()
+    };
+    const itemRequest = itemsStore.add(newItem);
+    return new Promise((resolve, reject) => {
+      itemRequest.onsuccess = async (e) => {
+        const itemId = e.target.result;
+        // anexar cada PDF
+        const attachmentPromises = [];
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          if (file.type === 'application/pdf') {
+            const fileData = await readFileAsBlob(file);
+            const attachment = {
+              itemId: itemId,
+              fileName: file.name,
+              fileSize: file.size,
+              fileType: file.type,
+              blob: fileData
+            };
+            const addPromise = new Promise((resAtt, rejAtt) => {
+              const attRequest = attachmentsStore.add(attachment);
+              attRequest.onsuccess = () => resAtt();
+              attRequest.onerror = () => rejAtt(attRequest.error);
+            });
+            attachmentPromises.push(addPromise);
+          }
+        }
+        await Promise.all(attachmentPromises);
+        resolve(itemId);
+      };
+      itemRequest.onerror = () => reject(itemRequest.error);
+    });
+  }
+
+  // carregar todos os itens e seus anexos
+  async function getAllItemsWithAttachments() {
+    const dbConn = await openDB();
+    const items = await new Promise((resolve, reject) => {
+      const tx = dbConn.transaction(STORE_ITEMS, 'readonly');
+      const store = tx.objectStore(STORE_ITEMS);
+      const all = store.getAll();
+      all.onsuccess = () => resolve(all.result);
+      all.onerror = () => reject(all.error);
+    });
+    const attachments = await new Promise((resolve, reject) => {
+      const tx = dbConn.transaction(STORE_ATTACHMENTS, 'readonly');
+      const store = tx.objectStore(STORE_ATTACHMENTS);
+      const all = store.getAll();
+      all.onsuccess = () => resolve(all.result);
+      all.onerror = () => reject(all.error);
+    });
+    // agrupar attachments por itemId
+    const attachmentsMap = new Map();
+    attachments.forEach(att => {
+      if (!attachmentsMap.has(att.itemId)) attachmentsMap.set(att.itemId, []);
+      attachmentsMap.get(att.itemId).push(att);
+    });
+    return items.map(item => ({
+      ...item,
+      attachments: attachmentsMap.get(item.id) || []
+    }));
+  }
+
+  function readFileAsBlob(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = (e) => reject(e);
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  async function addAttachmentToItem(itemId, file) {
+    if (file.type !== 'application/pdf') throw new Error('Apenas PDF');
+    const dbConn = await openDB();
+    const tx = dbConn.transaction(STORE_ATTACHMENTS, 'readwrite');
+    const store = tx.objectStore(STORE_ATTACHMENTS);
+    const fileData = await readFileAsBlob(file);
+    const attachment = {
+      itemId: itemId,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      blob: fileData
+    };
+    return new Promise((resolve, reject) => {
+      const request = store.add(attachment);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async function deleteAttachment(fileId) {
+    const dbConn = await openDB();
+    const tx = dbConn.transaction(STORE_ATTACHMENTS, 'readwrite');
+    const store = tx.objectStore(STORE_ATTACHMENTS);
+    return new Promise((resolve, reject) => {
+      const req = store.delete(fileId);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function deleteItemAndAttachments(itemId) {
+    const dbConn = await openDB();
+    // pegar todos anexos do item
+    const attachments = await new Promise((resolve, reject) => {
+      const tx = dbConn.transaction(STORE_ATTACHMENTS, 'readonly');
+      const index = tx.objectStore(STORE_ATTACHMENTS).index('by_itemId');
+      const range = IDBKeyRange.only(itemId);
+      const all = index.getAll(range);
+      all.onsuccess = () => resolve(all.result);
+      all.onerror = () => reject(all.error);
+    });
+    const tx = dbConn.transaction([STORE_ITEMS, STORE_ATTACHMENTS], 'readwrite');
+    const itemsStore = tx.objectStore(STORE_ITEMS);
+    const attStore = tx.objectStore(STORE_ATTACHMENTS);
+    // deletar anexos
+    for (const att of attachments) {
+      attStore.delete(att.fileId);
+    }
+    itemsStore.delete(itemId);
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  // ==================== RENDERIZAÇÃO ====================
+  const itemsContainer = document.getElementById('itemsContainer');
+  async function renderDashboard() {
+    const items = await getAllItemsWithAttachments();
+    if (items.length === 0) {
+      itemsContainer.innerHTML = `<div class="empty-state">✨ Nenhum item cadastrado. Clique no botão + para adicionar.</div>`;
+      return;
+    }
+    itemsContainer.innerHTML = items.map(item => `
+      <div class="item-card" data-item-id="${item.id}">
+        <div class="item-header">
+          <div class="item-info">
+            <h3>📌 ${escapeHtml(item.name)}</h3>
+            <p>ID: ${escapeHtml(item.code)}</p>
+          </div>
+          <button class="delete-item" data-id="${item.id}" title="Excluir item">🗑️</button>
+        </div>
+        <div class="attachments-area">
+          <div class="attachments-title">
+            📎 Anexos (PDF) 
+          </div>
+          <div class="pdf-list" id="pdfList-${item.id}">
+            ${item.attachments.map(att => `
+              <div class="pdf-badge" data-fileid="${att.fileId}">
+                <a href="#" data-blob-id="${att.fileId}" data-filename="${att.fileName}">📄 ${truncate(att.fileName, 20)}</a>
+                <button class="remove-pdf" data-fileid="${att.fileId}" title="Remover PDF">✖</button>
+              </div>
+            `).join('')}
+          </div>
+          <button class="add-pdf-btn" data-itemid="${item.id}">+ Adicionar PDF</button>
+        </div>
+      </div>
+    `).join('');
+    // eventos de exclusão de item
+    document.querySelectorAll('.delete-item').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = Number(btn.dataset.id);
+        if (confirm('Excluir este item e todos os PDFs vinculados?')) {
+          await deleteItemAndAttachments(id);
+          renderDashboard();
+        }
+      });
+    });
+    // eventos de abrir PDF
+    document.querySelectorAll('a[data-blob-id]').forEach(link => {
+      link.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const fileId = Number(link.dataset.blobId);
+        const dbConn = await openDB();
+        const tx = dbConn.transaction(STORE_ATTACHMENTS, 'readonly');
+        const store = tx.objectStore(STORE_ATTACHMENTS);
+        const getReq = store.get(fileId);
+        getReq.onsuccess = () => {
+          const attachment = getReq.result;
+          if (attachment && attachment.blob) {
+            const blob = new Blob([attachment.blob], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          } else {
+            alert('Arquivo não encontrado');
+          }
+        };
+        getReq.onerror = () => alert('Erro ao carregar PDF');
+      });
+    });
+    // eventos de remover PDF
+    document.querySelectorAll('.remove-pdf').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const fileId = Number(btn.dataset.fileid);
+        if (confirm('Remover este anexo?')) {
+          await deleteAttachment(fileId);
+          renderDashboard();
+        }
+      });
+    });
+    // eventos de "Adicionar PDF"
+    document.querySelectorAll('.add-pdf-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const itemId = Number(btn.dataset.itemid);
+        openPdfModal(itemId);
+      });
+    });
+  }
+
+  function truncate(str, len) {
+    if (str.length <= len) return str;
+    return str.substr(0, len) + '…';
+  }
+  function escapeHtml(str) {
+    return str.replace(/[&<>]/g, function(m) {
+      if (m === '&') return '&amp;';
+      if (m === '<') return '&lt;';
+      if (m === '>') return '&gt;';
+      return m;
+    });
+  }
+
+  // ==================== MODAL NOVO ITEM ====================
+  const modal = document.getElementById('itemModal');
+  const addItemBtn = document.getElementById('addItemBtn');
+  const closeModalBtn = document.getElementById('closeModalBtn');
+  const saveItemBtn = document.getElementById('saveItemBtn');
+  const itemNameInput = document.getElementById('itemName');
+  const itemIdInput = document.getElementById('itemId');
+  const pdfFilesInput = document.getElementById('pdfFiles');
+
+  function openModal() {
+    modal.style.display = 'flex';
+    itemNameInput.value = '';
+    itemIdInput.value = '';
+    pdfFilesInput.value = '';
+  }
+  function closeModal() {
+    modal.style.display = 'none';
+  }
+  addItemBtn.addEventListener('click', openModal);
+  closeModalBtn.addEventListener('click', closeModal);
+  saveItemBtn.addEventListener('click', async () => {
+    const name = itemNameInput.value.trim();
+    const code = itemIdInput.value.trim();
+    const files = pdfFilesInput.files;
+    if (!name || !code) {
+      alert('Preencha Nome e ID do item');
+      return;
+    }
+    try {
+      await saveItemWithAttachments(name, code, Array.from(files));
+      closeModal();
+      renderDashboard();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao salvar item');
+    }
+  });
+
+  // ==================== MODAL ADICIONAR PDF A ITEM EXISTENTE ====================
+  const pdfModal = document.getElementById('pdfModal');
+  const closePdfModalBtn = document.getElementById('closePdfModalBtn');
+  const savePdfBtn = document.getElementById('savePdfBtn');
+  const extraPdfFiles = document.getElementById('extraPdfFiles');
+  const pdfModalItemNameSpan = document.getElementById('pdfModalItemName');
+  let currentItemIdForPdf = null;
+
+  function openPdfModal(itemId) {
+    currentItemIdForPdf = itemId;
+    // buscar nome do item
+    (async () => {
+      const items = await getAllItemsWithAttachments();
+      const item = items.find(i => i.id === itemId);
+      pdfModalItemNameSpan.innerText = `Item: ${item ? item.name : ''} (ID: ${item?.code})`;
+    })();
+    extraPdfFiles.value = '';
+    pdfModal.style.display = 'flex';
+  }
+  closePdfModalBtn.addEventListener('click', () => {
+    pdfModal.style.display = 'none';
+    currentItemIdForPdf = null;
+  });
+  savePdfBtn.addEventListener('click', async () => {
+    if (!currentItemIdForPdf) return;
+    const files = extraPdfFiles.files;
+    if (files.length === 0) {
+      alert('Selecione pelo menos um PDF');
+      return;
+    }
+    try {
+      for (let file of files) {
+        if (file.type === 'application/pdf') {
+          await addAttachmentToItem(currentItemIdForPdf, file);
+        } else {
+          alert(`Arquivo ${file.name} não é PDF, ignorado.`);
+        }
+      }
+      pdfModal.style.display = 'none';
+      renderDashboard();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao adicionar PDF');
+    }
+  });
+
+  // ==================== LOGOUT ====================
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    window.location.href = 'index.html';
+  });
+
+  // inicialização
+  window.addEventListener('DOMContentLoaded', async () => {
+    await openDB();
+    renderDashboard();
+  });
+</script>
 </body>
 </html>
