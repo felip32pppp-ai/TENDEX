@@ -97,14 +97,13 @@
   (function() {
     // ---------- CONSTANTES ----------
     const DB_NAME = 'ItemPDFMemorialDB';
-    const DB_VERSION = 6; // incrementado para garantir upgrade
+    const DB_VERSION = 7;
     const STORE_ITEMS = 'items';
     const STORE_FILES = 'files';
     const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
     const monthKeys = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
     let db = null;
-    let editingItemId = null;
 
     // ---------- ABRIR BANCO DE DADOS ----------
     async function openDB() {
@@ -118,12 +117,9 @@
         };
         request.onupgradeneeded = (e) => {
           const dbUp = e.target.result;
-          // Apaga stores antigas para garantir estrutura limpa
           if (dbUp.objectStoreNames.contains(STORE_ITEMS)) dbUp.deleteObjectStore(STORE_ITEMS);
           if (dbUp.objectStoreNames.contains(STORE_FILES)) dbUp.deleteObjectStore(STORE_FILES);
           const itemStore = dbUp.createObjectStore(STORE_ITEMS, { keyPath: 'id', autoIncrement: true });
-          // Criar índice único no campo 'code' para evitar duplicatas (opcional, mas usaremos validação manual)
-          // Apenas criamos o índice para consultas eficientes.
           itemStore.createIndex('by_code', 'code', { unique: true });
           const fileStore = dbUp.createObjectStore(STORE_FILES, { keyPath: 'id', autoIncrement: true });
           fileStore.createIndex('by_item_cat', ['itemId', 'category'], { unique: true });
@@ -141,7 +137,103 @@
       });
     }
 
-    // Verificar se um código já existe (excluindo o próprio item em edição)
+    // Função principal: salvar item completo (incluindo arquivos)
+    // Recebe itemId (null para novo), name, code, e um array de { category, file } (file pode ser null para manter)
+    // Retorna o itemId salvo
+    async function saveItemComplete(itemId, name, code, filesToProcess) {
+      // 1. Verificar duplicidade de código ANTES de iniciar transação
+      const isDuplicate = await isCodeDuplicate(code, itemId);
+      if (isDuplicate) {
+        throw new Error(`O código "${code}" já está em uso. Escolha um código único.`);
+      }
+
+      // 2. Ler todos os arquivos para buffer (fora da transação)
+      const filesBuffer = [];
+      for (const item of filesToProcess) {
+        if (item.file) {
+          const buffer = await readFileAsBuffer(item.file);
+          filesBuffer.push({
+            category: item.category,
+            fileName: item.file.name,
+            fileType: item.file.type,
+            fileSize: item.file.size,
+            blob: buffer
+          });
+        } else {
+          filesBuffer.push({ category: item.category, file: null }); // manter existente
+        }
+      }
+
+      const dbConn = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = dbConn.transaction([STORE_ITEMS, STORE_FILES], 'readwrite');
+        const itemStore = tx.objectStore(STORE_ITEMS);
+        const fileStore = tx.objectStore(STORE_FILES);
+        const fileIndex = fileStore.index('by_item_cat');
+
+        let newItemId = itemId;
+
+        // Função para processar após salvar o item
+        const processAfterItem = () => {
+          // Para cada categoria, deletar arquivo existente (se houver) e adicionar novo se fornecido
+          // Precisamos fazer as operações sequencialmente dentro da transação, mas sem async/await dentro dela.
+          // Vamos usar um loop com pedidos encadeados usando callbacks ou promises, mas como estamos dentro de uma transação,
+          // devemos aguardar cada operação. A abordagem é usar um Promise resolve no final.
+          // Vamos usar um contador e um array de promessas.
+          const promises = [];
+          for (const item of filesBuffer) {
+            if (item.file !== null) {
+              // Deletar existente se houver
+              const deletePromise = new Promise((resDel, rejDel) => {
+                const getRequest = fileIndex.get([newItemId, item.category]);
+                getRequest.onsuccess = () => {
+                  const existing = getRequest.result;
+                  if (existing) {
+                    const delReq = fileStore.delete(existing.id);
+                    delReq.onsuccess = () => resDel();
+                    delReq.onerror = () => rejDel(delReq.error);
+                  } else {
+                    resDel();
+                  }
+                };
+                getRequest.onerror = () => rejDel(getRequest.error);
+              });
+              promises.push(deletePromise.then(() => {
+                // Adicionar novo
+                return new Promise((resAdd, rejAdd) => {
+                  const newFile = {
+                    itemId: newItemId,
+                    category: item.category,
+                    fileName: item.fileName,
+                    fileType: item.fileType,
+                    fileSize: item.fileSize,
+                    blob: item.blob,
+                    updatedAt: new Date().toISOString()
+                  };
+                  const addReq = fileStore.add(newFile);
+                  addReq.onsuccess = () => resAdd();
+                  addReq.onerror = () => rejAdd(addReq.error);
+                });
+              }));
+            }
+          }
+          Promise.all(promises).then(() => resolve(newItemId)).catch(reject);
+        };
+
+        // Salvar ou atualizar item
+        const item = { name, code };
+        if (newItemId) item.id = newItemId;
+        const itemRequest = itemStore.put(item);
+        itemRequest.onsuccess = (e) => {
+          newItemId = e.target.result;
+          processAfterItem();
+        };
+        itemRequest.onerror = () => reject(itemRequest.error);
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    // Verificar duplicidade de código (usando transaction readonly)
     async function isCodeDuplicate(code, excludeId = null) {
       const dbConn = await openDB();
       return new Promise((resolve, reject) => {
@@ -161,70 +253,42 @@
       });
     }
 
-    // Salvar item (nome e código) com verificação de unicidade
-    async function saveItem(itemId, name, code) {
-      // Verificar duplicidade
-      const isDuplicate = await isCodeDuplicate(code, itemId);
-      if (isDuplicate) {
-        throw new Error(`O código "${code}" já está em uso. Escolha um código único.`);
-      }
+    // Função para adicionar um arquivo avulso a um item existente
+    async function addFileToItem(itemId, category, file) {
+      // Ler o arquivo primeiro
+      const buffer = await readFileAsBuffer(file);
       const dbConn = await openDB();
       return new Promise((resolve, reject) => {
-        const tx = dbConn.transaction(STORE_ITEMS, 'readwrite');
-        const store = tx.objectStore(STORE_ITEMS);
-        const item = { name: name.trim(), code: code.trim() };
-        if (itemId) item.id = parseInt(itemId);
-        const request = store.put(item);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-        tx.onerror = () => reject(tx.error);
-      });
-    }
-
-    // Salvar um arquivo para um item e categoria (substitui se já existir)
-    async function saveFileForItem(itemId, category, file) {
-      if (!file) return null;
-      const dbConn = await openDB();
-      // Primeiro, buscar se já existe um arquivo com esta categoria
-      const existingFileId = await new Promise((resolve, reject) => {
-        const tx = dbConn.transaction(STORE_FILES, 'readonly');
-        const store = tx.objectStore(STORE_FILES);
-        const index = store.index('by_item_cat');
-        const request = index.get([itemId, category]);
-        request.onsuccess = () => resolve(request.result ? request.result.id : null);
-        request.onerror = () => reject(request.error);
-      });
-      
-      // Agora, em uma nova transação, excluir o antigo (se houver) e adicionar o novo
-      return new Promise(async (resolve, reject) => {
         const tx = dbConn.transaction(STORE_FILES, 'readwrite');
-        const store = tx.objectStore(STORE_FILES);
-        
-        // Função para executar após exclusão (se necessário)
-        const afterDelete = () => {
-          const fileBuffer = readFileAsBuffer(file).then(buffer => {
+        const fileStore = tx.objectStore(STORE_FILES);
+        const index = fileStore.index('by_item_cat');
+
+        // Primeiro, deletar se já existir
+        const getRequest = index.get([itemId, category]);
+        getRequest.onsuccess = () => {
+          const existing = getRequest.result;
+          const deletePromise = existing ? new Promise((resDel, rejDel) => {
+            const delReq = fileStore.delete(existing.id);
+            delReq.onsuccess = () => resDel();
+            delReq.onerror = () => rejDel(delReq.error);
+          }) : Promise.resolve();
+
+          deletePromise.then(() => {
             const newFile = {
-              itemId: itemId,
-              category: category,
+              itemId,
+              category,
               fileName: file.name,
               fileType: file.type,
               fileSize: file.size,
               blob: buffer,
               updatedAt: new Date().toISOString()
             };
-            const addRequest = store.add(newFile);
-            addRequest.onsuccess = () => resolve(addRequest.result);
-            addRequest.onerror = () => reject(addRequest.error);
+            const addReq = fileStore.add(newFile);
+            addReq.onsuccess = () => resolve(addReq.result);
+            addReq.onerror = () => reject(addReq.error);
           }).catch(reject);
         };
-        
-        if (existingFileId) {
-          const deleteRequest = store.delete(existingFileId);
-          deleteRequest.onsuccess = afterDelete;
-          deleteRequest.onerror = () => reject(deleteRequest.error);
-        } else {
-          afterDelete();
-        }
+        getRequest.onerror = () => reject(getRequest.error);
         tx.onerror = () => reject(tx.error);
       });
     }
@@ -255,17 +319,13 @@
     // Excluir item e todos os seus arquivos
     async function deleteItemAndFiles(itemId) {
       const dbConn = await openDB();
-      // Buscar todos os IDs de arquivos do item
       const files = await getFilesForItem(itemId);
       const fileIds = files.map(f => f.id);
-      
       const tx = dbConn.transaction([STORE_ITEMS, STORE_FILES], 'readwrite');
       const itemStore = tx.objectStore(STORE_ITEMS);
       const fileStore = tx.objectStore(STORE_FILES);
-      
       itemStore.delete(itemId);
       fileIds.forEach(id => fileStore.delete(id));
-      
       return new Promise((resolve, reject) => {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
@@ -424,7 +484,7 @@
             input.onchange = async (ev) => {
               const file = ev.target.files[0];
               if (file && file.type === 'application/pdf') {
-                await saveFileForItem(itemId, category, file);
+                await addFileToItem(itemId, category, file);
                 renderDashboard();
               } else if (file) alert('Selecione um PDF.');
             };
@@ -458,6 +518,8 @@
     const saveItemBtn = document.getElementById('saveItemBtn');
     const closeModalBtn = document.getElementById('closeModalBtn');
     const editItemIdField = document.getElementById('editItemId');
+
+    let editingItemId = null;
 
     function buildMonthlyInputs() {
       monthlyFilesContainer.innerHTML = '';
@@ -503,7 +565,6 @@
       itemCodeInput.value = item.code;
       codeErrorDiv.innerText = '';
       editItemIdField.value = itemId;
-      // Limpar inputs de arquivo (não podemos pré-carregar)
       memorialFileInput.value = '';
       monthKeys.forEach(key => {
         const inp = document.getElementById(`month_${key}`);
@@ -519,36 +580,31 @@
         alert('Preencha Nome e Código do item');
         return;
       }
-      // Limpar mensagem de erro anterior
       codeErrorDiv.innerText = '';
+
+      // Coletar arquivos a serem processados (apenas os que foram selecionados)
+      const filesToProcess = [];
+
+      // Memorial
+      if (memorialFileInput.files.length > 0) {
+        filesToProcess.push({ category: 'memorial', file: memorialFileInput.files[0] });
+      } else {
+        filesToProcess.push({ category: 'memorial', file: null }); // manter existente
+      }
+
+      // Meses
+      for (let i = 0; i < monthKeys.length; i++) {
+        const key = monthKeys[i];
+        const input = document.getElementById(`month_${key}`);
+        if (input && input.files.length > 0) {
+          filesToProcess.push({ category: key, file: input.files[0] });
+        } else {
+          filesToProcess.push({ category: key, file: null });
+        }
+      }
+
       try {
-        let itemId = editingItemId;
-        // Salvar ou atualizar item (a função saveItem já verifica duplicidade)
-        const savedId = await saveItem(itemId, name, code);
-        itemId = savedId;
-        
-        // Processar memorial
-        if (memorialFileInput.files.length > 0) {
-          const file = memorialFileInput.files[0];
-          if (file.type === 'application/pdf') {
-            await saveFileForItem(itemId, 'memorial', file);
-          } else {
-            alert('O arquivo do memorial deve ser PDF.');
-          }
-        }
-        // Processar meses
-        for (let i = 0; i < monthKeys.length; i++) {
-          const key = monthKeys[i];
-          const input = document.getElementById(`month_${key}`);
-          if (input && input.files.length > 0) {
-            const file = input.files[0];
-            if (file.type === 'application/pdf') {
-              await saveFileForItem(itemId, key, file);
-            } else {
-              alert(`Arquivo de ${monthNames[i]} deve ser PDF. Ignorado.`);
-            }
-          }
-        }
+        const savedId = await saveItemComplete(editingItemId, name, code, filesToProcess);
         modal.style.display = 'none';
         renderDashboard();
       } catch (err) {
