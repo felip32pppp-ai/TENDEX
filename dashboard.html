@@ -9,20 +9,25 @@
     body { background: #f3f6fc; padding: 2rem 1.5rem; }
     .dashboard-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; padding-bottom: 0.75rem; border-bottom: 2px solid #cbd5e1; }
     .dashboard-header h1 { font-size: 1.8rem; background: linear-gradient(135deg, #0f2b3d, #1e4a76); background-clip: text; -webkit-background-clip: text; color: transparent; }
+    .search-area { display: flex; gap: 0.5rem; align-items: center; background: white; padding: 0.3rem 0.8rem; border-radius: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .search-area input { border: none; padding: 0.5rem; font-size: 0.9rem; outline: none; width: 200px; }
+    .search-area button { background: none; border: none; cursor: pointer; font-size: 1.2rem; }
     .logout-btn { background: #ef4444; color: white; border: none; padding: 0.5rem 1.2rem; border-radius: 2rem; font-weight: 600; cursor: pointer; }
     .logout-btn:hover { background: #dc2626; }
-    .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 1.5rem; margin-top: 1rem; }
-    .item-card { background: white; border-radius: 1.5rem; box-shadow: 0 8px 20px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #e2edff; transition: 0.2s; }
-    .item-card:hover { transform: translateY(-3px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
-    .item-header { background: #f8fafc; padding: 1rem 1.2rem; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+    .items-grid { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
+    .item-card { background: white; border-radius: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #e2edff; transition: 0.2s; }
+    .item-header { background: #f8fafc; padding: 1rem 1.2rem; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+    .item-header:hover { background: #f1f5f9; }
     .item-info h3 { font-size: 1.2rem; color: #0f172a; }
     .item-info p { font-size: 0.8rem; color: #4b5563; margin-top: 0.2rem; }
+    .item-actions { display: flex; gap: 0.5rem; }
     .delete-item, .edit-item { background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 0.3rem; border-radius: 50%; }
     .delete-item { color: #94a3b8; }
     .delete-item:hover { color: #dc2626; background: #fee2e2; }
-    .edit-item { color: #3b82f6; margin-right: 0.5rem; }
+    .edit-item { color: #3b82f6; }
     .edit-item:hover { background: #e0f2fe; }
-    .attachments-area { padding: 1rem 1.2rem; }
+    .attachments-area { padding: 1rem 1.2rem; display: none; border-top: 1px solid #eef2ff; }
+    .attachments-area.expanded { display: block; }
     .attachments-title { font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 0.8rem; border-left: 3px solid #3b82f6; padding-left: 0.6rem; }
     .pdf-row { display: flex; align-items: center; justify-content: space-between; background: #f9fafb; margin-bottom: 0.6rem; padding: 0.4rem 0.8rem; border-radius: 2rem; border: 1px solid #eef2ff; }
     .pdf-label { font-weight: 600; font-size: 0.75rem; background: #e2e8f0; padding: 0.2rem 0.6rem; border-radius: 2rem; min-width: 85px; text-align: center; color: #1e293b; }
@@ -53,14 +58,22 @@
     .notice { font-size: 0.7rem; color: #5b6e8c; margin-top: 0.8rem; text-align: center; }
     .error-text { color: #dc2626; font-size: 0.75rem; margin-top: 0.25rem; }
     .loading { text-align: center; padding: 2rem; color: #1e4a76; }
+    .expand-icon { font-size: 1.2rem; transition: transform 0.2s; }
+    .expanded .expand-icon { transform: rotate(90deg); }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
 <div class="dashboard-header">
-  <h1>📁 Itens Compartilhados (Memorial + Mensais)</h1>
-  <button class="logout-btn" id="logoutBtn">Sair</button>
+  <h1>📁 Itens Compartilhados</h1>
+  <div style="display: flex; gap: 1rem; align-items: center;">
+    <div class="search-area">
+      <input type="text" id="searchInput" placeholder="Buscar por ID..." autocomplete="off">
+      <button id="searchBtn">🔍</button>
+    </div>
+    <button class="logout-btn" id="logoutBtn">Sair</button>
+  </div>
 </div>
 
 <div id="itemsContainer" class="items-grid"></div>
@@ -108,6 +121,7 @@
     const monthKeys = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
     let editingItemId = null;
+    let allItems = []; // guarda todos os itens para filtro
 
     // ==================== FUNÇÕES SUPABASE ====================
     async function getAllItemsWithFiles() {
@@ -269,7 +283,7 @@
       if (error) throw error;
     }
 
-    // ==================== RENDERIZAÇÃO ====================
+    // ==================== RENDERIZAÇÃO COM FILTRO ====================
     function escapeHtml(str) {
       if (!str) return '';
       return str.replace(/[&<>]/g, function(m) {
@@ -307,61 +321,111 @@
       }
     }
 
-    async function renderDashboard() {
+    function renderItemCard(item, expandedId) {
+      const files = item.files;
+      const memorialFile = files.find(f => f.category === 'memorial');
+      const monthlyFiles = monthKeys.map(key => files.find(f => f.category === key));
+      const isExpanded = (expandedId === item.id);
+      return `
+        <div class="item-card" data-item-id="${item.id}">
+          <div class="item-header" data-id="${item.id}">
+            <div class="item-info">
+              <h3>📌 ${escapeHtml(item.name)}</h3>
+              <p>ID: ${escapeHtml(item.code)}</p>
+            </div>
+            <div class="item-actions">
+              <button class="edit-item" data-id="${item.id}" title="Editar item">✏️</button>
+              <button class="delete-item" data-id="${item.id}" title="Excluir item">🗑️</button>
+              <span class="expand-icon">▶</span>
+            </div>
+          </div>
+          <div class="attachments-area ${isExpanded ? 'expanded' : ''}" data-attachments="${item.id}">
+            <div class="attachments-title">📄 Memorial de Cálculo</div>
+            ${renderPdfRow('memorial', 'Memorial', memorialFile, item.id)}
+            <div class="attachments-title" style="margin-top: 1rem;">📅 Documentos Mensais</div>
+            ${monthNames.map((month, idx) => renderPdfRow(monthKeys[idx], month, monthlyFiles[idx], item.id)).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // Guardar qual item está expandido
+    let expandedItemId = null;
+
+    async function renderDashboard(filterText = '') {
       const container = document.getElementById('itemsContainer');
       container.innerHTML = '<div class="loading">Carregando dados...</div>';
       try {
-        const items = await getAllItemsWithFiles();
-        if (items.length === 0) {
-          container.innerHTML = `<div class="empty-state">✨ Nenhum item cadastrado. Clique no botão + para adicionar.</div>`;
+        allItems = await getAllItemsWithFiles();
+        let filteredItems = allItems;
+        if (filterText.trim() !== '') {
+          const searchLower = filterText.trim().toLowerCase();
+          filteredItems = allItems.filter(item => item.code.toLowerCase().includes(searchLower));
+        }
+        if (filteredItems.length === 0) {
+          container.innerHTML = `<div class="empty-state">✨ Nenhum item encontrado.</div>`;
           return;
         }
         let html = '';
-        for (const item of items) {
-          const files = item.files;
-          const memorialFile = files.find(f => f.category === 'memorial');
-          const monthlyFiles = monthKeys.map(key => files.find(f => f.category === key));
-          html += `
-            <div class="item-card" data-item-id="${item.id}">
-              <div class="item-header">
-                <div class="item-info">
-                  <h3>📌 ${escapeHtml(item.name)}</h3>
-                  <p>ID: ${escapeHtml(item.code)}</p>
-                </div>
-                <div>
-                  <button class="edit-item" data-id="${item.id}" title="Editar item">✏️</button>
-                  <button class="delete-item" data-id="${item.id}" title="Excluir item">🗑️</button>
-                </div>
-              </div>
-              <div class="attachments-area">
-                <div class="attachments-title">📄 Memorial de Cálculo</div>
-                ${renderPdfRow('memorial', 'Memorial', memorialFile, item.id)}
-                <div class="attachments-title" style="margin-top: 1rem;">📅 Documentos Mensais</div>
-                ${monthNames.map((month, idx) => renderPdfRow(monthKeys[idx], month, monthlyFiles[idx], item.id)).join('')}
-              </div>
-            </div>
-          `;
+        for (const item of filteredItems) {
+          html += renderItemCard(item, expandedItemId);
         }
         container.innerHTML = html;
 
-        // Eventos dinâmicos
+        // Eventos de expansão
+        document.querySelectorAll('.item-header').forEach(header => {
+          header.addEventListener('click', (e) => {
+            // Evitar que o clique nos botões de ação dispare a expansão
+            if (e.target.classList.contains('edit-item') || e.target.classList.contains('delete-item')) {
+              return;
+            }
+            const itemId = Number(header.dataset.id);
+            const attachmentsDiv = document.querySelector(`.attachments-area[data-attachments="${itemId}"]`);
+            if (attachmentsDiv) {
+              const isCurrentlyExpanded = attachmentsDiv.classList.contains('expanded');
+              // Fechar todos antes de abrir o atual (ou pode alternar individual)
+              document.querySelectorAll('.attachments-area').forEach(div => div.classList.remove('expanded'));
+              if (!isCurrentlyExpanded) {
+                attachmentsDiv.classList.add('expanded');
+                expandedItemId = itemId;
+              } else {
+                expandedItemId = null;
+              }
+              // Atualizar ícone (opcional)
+              document.querySelectorAll('.expand-icon').forEach(icon => icon.textContent = '▶');
+              if (attachmentsDiv.classList.contains('expanded')) {
+                const icon = header.querySelector('.expand-icon');
+                if (icon) icon.textContent = '▼';
+              } else {
+                const icon = header.querySelector('.expand-icon');
+                if (icon) icon.textContent = '▶';
+              }
+            }
+          });
+        });
+
+        // Eventos de botões
         document.querySelectorAll('.delete-item').forEach(btn => {
           btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
             const id = Number(btn.dataset.id);
             if (confirm('Excluir este item e todos os PDFs?')) {
               await deleteItemAndFiles(id);
-              renderDashboard();
+              if (expandedItemId === id) expandedItemId = null;
+              renderDashboard(document.getElementById('searchInput').value);
             }
           });
         });
         document.querySelectorAll('.edit-item').forEach(btn => {
           btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
             const id = Number(btn.dataset.id);
             await openEditModal(id);
           });
         });
         document.querySelectorAll('.upload-pdf-btn').forEach(btn => {
           btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
             const itemId = Number(btn.dataset.itemid);
             const category = btn.dataset.category;
             const input = document.createElement('input');
@@ -372,7 +436,7 @@
               if (file && file.type === 'application/pdf') {
                 try {
                   await addFileToItem(itemId, category, file);
-                  renderDashboard();
+                  renderDashboard(document.getElementById('searchInput').value);
                 } catch (err) {
                   alert('Erro ao adicionar PDF: ' + err.message);
                 }
@@ -387,7 +451,7 @@
             const fileId = Number(btn.dataset.fileid);
             if (confirm('Remover este PDF?')) {
               await deleteFileById(fileId);
-              renderDashboard();
+              renderDashboard(document.getElementById('searchInput').value);
             }
           });
         });
@@ -397,7 +461,7 @@
       }
     }
 
-    // ==================== MODAL ====================
+    // ==================== MODAL (igual) ====================
     const modal = document.getElementById('itemModal');
     const modalTitle = document.getElementById('modalTitle');
     const itemNameInput = document.getElementById('itemName');
@@ -444,7 +508,7 @@
     }
 
     async function openEditModal(itemId) {
-      const items = await getAllItemsWithFiles();
+      const items = allItems.length ? allItems : await getAllItemsWithFiles();
       const item = items.find(i => i.id === itemId);
       if (!item) return;
       editingItemId = itemId;
@@ -489,7 +553,8 @@
       try {
         await saveItemComplete(editingItemId, name, code, filesToProcess);
         modal.style.display = 'none';
-        renderDashboard();
+        const searchValue = document.getElementById('searchInput').value;
+        renderDashboard(searchValue);
       } catch (err) {
         console.error(err);
         if (err.message.includes('código')) {
@@ -509,8 +574,19 @@
       window.location.href = 'index.html';
     });
 
+    // Busca
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    function handleSearch() {
+      renderDashboard(searchInput.value);
+    }
+    searchBtn.addEventListener('click', handleSearch);
+    searchInput.addEventListener('keyup', (e) => {
+      if (e.key === 'Enter') handleSearch();
+    });
+
     window.addEventListener('DOMContentLoaded', () => {
-      renderDashboard();
+      renderDashboard('');
     });
   })();
 </script>
