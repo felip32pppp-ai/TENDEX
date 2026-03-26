@@ -3,514 +3,84 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard | Cadastro Compartilhado</title>
+  <title>Dashboard - Teste</title>
   <style>
-    * { margin:0; padding:0; box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
-    body { background: #f3f6fc; padding: 2rem 1.5rem; }
-    .dashboard-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; padding-bottom: 0.75rem; border-bottom: 2px solid #cbd5e1; }
-    .dashboard-header h1 { font-size: 1.8rem; background: linear-gradient(135deg, #0f2b3d, #1e4a76); background-clip: text; -webkit-background-clip: text; color: transparent; }
-    .logout-btn { background: #ef4444; color: white; border: none; padding: 0.5rem 1.2rem; border-radius: 2rem; font-weight: 600; cursor: pointer; }
-    .logout-btn:hover { background: #dc2626; }
-    .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 1.5rem; margin-top: 1rem; }
-    .item-card { background: white; border-radius: 1.5rem; box-shadow: 0 8px 20px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #e2edff; transition: 0.2s; }
-    .item-card:hover { transform: translateY(-3px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
-    .item-header { background: #f8fafc; padding: 1rem 1.2rem; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
-    .item-info h3 { font-size: 1.2rem; color: #0f172a; }
-    .item-info p { font-size: 0.8rem; color: #4b5563; margin-top: 0.2rem; }
-    .delete-item, .edit-item { background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 0.3rem; border-radius: 50%; }
-    .delete-item { color: #94a3b8; }
-    .delete-item:hover { color: #dc2626; background: #fee2e2; }
-    .edit-item { color: #3b82f6; margin-right: 0.5rem; }
-    .edit-item:hover { background: #e0f2fe; }
-    .attachments-area { padding: 1rem 1.2rem; }
-    .attachments-title { font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 0.8rem; border-left: 3px solid #3b82f6; padding-left: 0.6rem; }
-    .pdf-row { display: flex; align-items: center; justify-content: space-between; background: #f9fafb; margin-bottom: 0.6rem; padding: 0.4rem 0.8rem; border-radius: 2rem; border: 1px solid #eef2ff; }
-    .pdf-label { font-weight: 600; font-size: 0.75rem; background: #e2e8f0; padding: 0.2rem 0.6rem; border-radius: 2rem; min-width: 85px; text-align: center; color: #1e293b; }
-    .pdf-file-info { flex: 1; margin: 0 0.8rem; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pdf-file-info a { text-decoration: none; color: #1e4a76; }
-    .pdf-file-info a:hover { text-decoration: underline; }
-    .pdf-actions { display: flex; gap: 0.4rem; }
-    .upload-pdf-btn, .remove-pdf-btn { background: none; border: none; cursor: pointer; font-size: 1rem; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
-    .upload-pdf-btn { color: #2c6e9e; }
-    .upload-pdf-btn:hover { background: #e0f2fe; }
-    .remove-pdf-btn { color: #9ca3af; }
-    .remove-pdf-btn:hover { background: #fee2e2; color: #dc2626; }
-    .empty-state { text-align: center; color: #6c86a3; margin-top: 4rem; }
-    .fab { position: fixed; bottom: 2rem; right: 2rem; background: linear-gradient(135deg, #0f2b3d, #1e4a76); color: white; width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; box-shadow: 0 8px 16px rgba(0,0,0,0.2); cursor: pointer; border: none; z-index: 10; }
-    .fab:hover { transform: scale(1.05); }
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000; }
-    .modal-content { background: white; max-width: 550px; width: 90%; border-radius: 1.5rem; padding: 1.5rem; max-height: 85vh; overflow-y: auto; }
-    .modal-content h2 { margin-bottom: 1rem; }
-    .form-group { margin-bottom: 1rem; }
-    .form-group label { display: block; font-weight: 600; margin-bottom: 0.3rem; font-size: 0.85rem; }
-    .form-group input[type="text"] { width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 1rem; }
-    .month-group { margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-    .month-group label { font-weight: 600; width: 110px; font-size: 0.8rem; }
-    .month-group input[type="file"] { flex: 1; }
-    .modal-buttons { display: flex; justify-content: flex-end; gap: 0.8rem; margin-top: 1.2rem; }
-    .btn-save { background: #1e4a76; color: white; padding: 0.5rem 1.2rem; border-radius: 2rem; border: none; cursor: pointer; }
-    .btn-cancel { background: #e2e8f0; color: #1e293b; padding: 0.5rem 1.2rem; border-radius: 2rem; border: none; cursor: pointer; }
-    .notice { font-size: 0.7rem; color: #5b6e8c; margin-top: 0.8rem; text-align: center; }
-    .error-text { color: #dc2626; font-size: 0.75rem; margin-top: 0.25rem; }
-    .loading { text-align: center; padding: 2rem; color: #1e4a76; }
+    /* (mesmo estilo anterior, pode copiar do código completo) */
+    body { font-family: sans-serif; padding: 2rem; }
+    .fab { position: fixed; bottom: 2rem; right: 2rem; background: #1e4a76; color: white; width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; cursor: pointer; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
+    .modal-content { background: white; padding: 2rem; border-radius: 1rem; min-width: 300px; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+  <h1>Dashboard de Teste</h1>
+  <div id="itemsContainer">Carregando...</div>
+  <button class="fab" id="addItemBtn">+</button>
 
-<div class="dashboard-header">
-  <h1>📁 Itens Compartilhados (Memorial + Mensais)</h1>
-  <button class="logout-btn" id="logoutBtn">Sair</button>
-</div>
-
-<div id="itemsContainer" class="items-grid"></div>
-<button class="fab" id="addItemBtn">+</button>
-
-<!-- Modal para criação/edição -->
-<div id="itemModal" class="modal">
-  <div class="modal-content">
-    <h2 id="modalTitle">➕ Novo Item</h2>
-    <input type="hidden" id="editItemId" value="">
-    <div class="form-group">
-      <label>Nome do Item *</label>
-      <input type="text" id="itemName" placeholder="Ex: Projeto Ponte">
+  <div id="itemModal" class="modal">
+    <div class="modal-content">
+      <h2>Novo Item</h2>
+      <input type="text" id="itemName" placeholder="Nome">
+      <input type="text" id="itemCode" placeholder="Código">
+      <button id="saveItemBtn">Salvar</button>
+      <button id="closeModalBtn">Cancelar</button>
     </div>
-    <div class="form-group">
-      <label>Código / ID *</label>
-      <input type="text" id="itemCode" placeholder="Ex: P-001">
-      <div id="codeError" class="error-text"></div>
-    </div>
-    <div class="attachments-title">📄 Memorial de Cálculo e Projeto</div>
-    <div class="month-group">
-      <label>Memorial:</label>
-      <input type="file" id="memorialFile" accept=".pdf">
-    </div>
-    <div class="attachments-title" style="margin-top: 1rem;">📅 Documentos Mensais</div>
-    <div id="monthlyFilesContainer"></div>
-    <div class="modal-buttons">
-      <button class="btn-cancel" id="closeModalBtn">Cancelar</button>
-      <button class="btn-save" id="saveItemBtn">Salvar</button>
-    </div>
-    <div class="notice">* Código deve ser único. Deixe os campos de arquivo em branco para manter os existentes (na edição).</div>
   </div>
-</div>
 
-<script>
-  // ==================== CONFIGURAÇÃO SUPABASE ====================
-  const SUPABASE_URL = "https://jklcvyuxwxgsfczrfaco.supabase.co";
-  const SUPABASE_ANON_KEY = "sb_publishable_oCE8y5qaLovVj0BU-rANHA__Zmy3XVl";
+  <script>
+    // Suas credenciais
+    const SUPABASE_URL = "https://jklcvyuxwxgsfczrfaco.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_oCE8y5qaLovVj0BU-rANHA__Zmy3XVl";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-  // Constantes dos meses
-  const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-  const monthKeys = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-
-  let editingItemId = null;
-
-  // ==================== FUNÇÕES SUPABASE ====================
-  async function getAllItemsWithFiles() {
-    const { data: items, error: itemsError } = await supabase
-      .from('items')
-      .select('*')
-      .order('id', { ascending: true });
-    if (itemsError) throw itemsError;
-
-    const { data: files, error: filesError } = await supabase
-      .from('files')
-      .select('*');
-    if (filesError) throw filesError;
-
-    const filesByItem = {};
-    files.forEach(file => {
-      if (!filesByItem[file.item_id]) filesByItem[file.item_id] = [];
-      filesByItem[file.item_id].push(file);
-    });
-
-    return items.map(item => ({
-      id: item.id,
-      name: item.name,
-      code: item.code,
-      files: filesByItem[item.id] || []
-    }));
-  }
-
-  async function saveItemComplete(itemId, name, code, filesToProcess) {
-    // 1. Verificar duplicidade de código
-    const { data: existing, error: dupError } = await supabase
-      .from('items')
-      .select('id')
-      .eq('code', code)
-      .maybeSingle();
-    if (dupError) throw dupError;
-    if (existing && existing.id !== itemId) {
-      throw new Error(`O código "${code}" já está em uso.`);
-    }
-
-    // 2. Upload dos arquivos para Storage (se houver)
-    const uploadedUrls = [];
-    for (const item of filesToProcess) {
-      if (item.file) {
-        const fileExt = item.file.name.split('.').pop();
-        const tempId = itemId || 'temp';
-        const filePath = `itens/${tempId}/${item.category}_${Date.now()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from('pdfs')
-          .upload(filePath, item.file);
-        if (uploadError) throw uploadError;
-        const { data: publicUrlData } = supabase.storage.from('pdfs').getPublicUrl(filePath);
-        uploadedUrls.push({
-          category: item.category,
-          url: publicUrlData.publicUrl,
-          fileName: item.file.name
-        });
-      } else {
-        uploadedUrls.push({ category: item.category, url: null });
-      }
-    }
-
-    // 3. Salvar/atualizar o item
-    let itemIdFinal = itemId;
-    if (itemId) {
-      const { error: updateError } = await supabase
-        .from('items')
-        .update({ name, code })
-        .eq('id', itemId);
-      if (updateError) throw updateError;
-    } else {
-      const { data: newItem, error: insertError } = await supabase
-        .from('items')
-        .insert({ name, code })
-        .select()
-        .single();
-      if (insertError) throw insertError;
-      itemIdFinal = newItem.id;
-    }
-
-    // 4. Inserir/atualizar registros de arquivos
-    for (const fileInfo of uploadedUrls) {
-      if (fileInfo.url) {
-        const { data: existingFile, error: findError } = await supabase
-          .from('files')
-          .select('id')
-          .eq('item_id', itemIdFinal)
-          .eq('category', fileInfo.category)
-          .maybeSingle();
-        if (findError) throw findError;
-
-        if (existingFile) {
-          const { error: updFileError } = await supabase
-            .from('files')
-            .update({ file_name: fileInfo.fileName, file_url: fileInfo.url })
-            .eq('id', existingFile.id);
-          if (updFileError) throw updFileError;
+    // Teste simples: buscar itens
+    async function carregarItens() {
+      try {
+        console.log("Tentando buscar itens...");
+        const { data, error } = await supabase.from('items').select('*');
+        if (error) throw error;
+        console.log("Itens carregados:", data);
+        const container = document.getElementById('itemsContainer');
+        if (data.length === 0) {
+          container.innerHTML = "Nenhum item cadastrado.";
         } else {
-          const { error: insFileError } = await supabase
-            .from('files')
-            .insert({
-              item_id: itemIdFinal,
-              category: fileInfo.category,
-              file_name: fileInfo.fileName,
-              file_url: fileInfo.url
-            });
-          if (insFileError) throw insFileError;
+          container.innerHTML = data.map(item => `<div><strong>${item.name}</strong> (${item.code})</div>`).join('');
         }
+      } catch (err) {
+        console.error("Erro ao carregar itens:", err);
+        document.getElementById('itemsContainer').innerHTML = "Erro: " + err.message;
       }
     }
 
-    return itemIdFinal;
-  }
+    // Modal
+    const modal = document.getElementById('itemModal');
+    const addBtn = document.getElementById('addItemBtn');
+    const closeBtn = document.getElementById('closeModalBtn');
+    const saveBtn = document.getElementById('saveItemBtn');
+    const nameInput = document.getElementById('itemName');
+    const codeInput = document.getElementById('itemCode');
 
-  async function addFileToItem(itemId, category, file) {
-    const fileExt = file.name.split('.').pop();
-    const filePath = `itens/${itemId}/${category}_${Date.now()}.${fileExt}`;
-    const { error: uploadError } = await supabase.storage
-      .from('pdfs')
-      .upload(filePath, file);
-    if (uploadError) throw uploadError;
-    const { data: publicUrlData } = supabase.storage.from('pdfs').getPublicUrl(filePath);
-    const fileUrl = publicUrlData.publicUrl;
-
-    const { data: existing, error: findError } = await supabase
-      .from('files')
-      .select('id')
-      .eq('item_id', itemId)
-      .eq('category', category)
-      .maybeSingle();
-    if (findError) throw findError;
-
-    if (existing) {
-      const { error: updateError } = await supabase
-        .from('files')
-        .update({ file_name: file.name, file_url: fileUrl })
-        .eq('id', existing.id);
-      if (updateError) throw updateError;
-    } else {
-      const { error: insertError } = await supabase
-        .from('files')
-        .insert({
-          item_id: itemId,
-          category: category,
-          file_name: file.name,
-          file_url: fileUrl
-        });
-      if (insertError) throw insertError;
-    }
-  }
-
-  async function deleteFileById(fileId) {
-    const { error } = await supabase.from('files').delete().eq('id', fileId);
-    if (error) throw error;
-  }
-
-  async function deleteItemAndFiles(itemId) {
-    const { error } = await supabase.from('items').delete().eq('id', itemId);
-    if (error) throw error;
-  }
-
-  // ==================== RENDERIZAÇÃO ====================
-  function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/[&<>]/g, function(m) {
-      if (m === '&') return '&amp;';
-      if (m === '<') return '&lt;';
-      if (m === '>') return '&gt;';
-      return m;
-    });
-  }
-
-  function renderPdfRow(category, label, file, itemId) {
-    if (file) {
-      return `
-        <div class="pdf-row">
-          <span class="pdf-label">${escapeHtml(label)}</span>
-          <div class="pdf-file-info">
-            <a href="${file.file_url}" target="_blank">📄 ${escapeHtml(file.file_name)}</a>
-          </div>
-          <div class="pdf-actions">
-            <button class="upload-pdf-btn" data-itemid="${itemId}" data-category="${category}" data-label="${label}" title="Substituir PDF">🔄</button>
-            <button class="remove-pdf-btn" data-fileid="${file.id}" title="Remover">✖</button>
-          </div>
-        </div>
-      `;
-    } else {
-      return `
-        <div class="pdf-row">
-          <span class="pdf-label">${escapeHtml(label)}</span>
-          <div class="pdf-file-info">— Nenhum PDF anexado —</div>
-          <div class="pdf-actions">
-            <button class="upload-pdf-btn" data-itemid="${itemId}" data-category="${category}" data-label="${label}" title="Adicionar PDF">➕</button>
-          </div>
-        </div>
-      `;
-    }
-  }
-
-  async function renderDashboard() {
-    const container = document.getElementById('itemsContainer');
-    container.innerHTML = '<div class="loading">Carregando dados...</div>';
-    try {
-      const items = await getAllItemsWithFiles();
-      if (items.length === 0) {
-        container.innerHTML = `<div class="empty-state">✨ Nenhum item cadastrado. Clique no botão + para adicionar.</div>`;
-        return;
+    addBtn.onclick = () => { modal.style.display = 'flex'; };
+    closeBtn.onclick = () => { modal.style.display = 'none'; };
+    saveBtn.onclick = async () => {
+      const name = nameInput.value.trim();
+      const code = codeInput.value.trim();
+      if (!name || !code) { alert("Preencha nome e código"); return; }
+      try {
+        const { data, error } = await supabase.from('items').insert({ name, code }).select();
+        if (error) throw error;
+        console.log("Item salvo:", data);
+        modal.style.display = 'none';
+        nameInput.value = '';
+        codeInput.value = '';
+        carregarItens();
+      } catch (err) {
+        alert("Erro: " + err.message);
       }
-      let html = '';
-      for (const item of items) {
-        const files = item.files;
-        const memorialFile = files.find(f => f.category === 'memorial');
-        const monthlyFiles = monthKeys.map(key => files.find(f => f.category === key));
-        html += `
-          <div class="item-card" data-item-id="${item.id}">
-            <div class="item-header">
-              <div class="item-info">
-                <h3>📌 ${escapeHtml(item.name)}</h3>
-                <p>ID: ${escapeHtml(item.code)}</p>
-              </div>
-              <div>
-                <button class="edit-item" data-id="${item.id}" title="Editar item">✏️</button>
-                <button class="delete-item" data-id="${item.id}" title="Excluir item">🗑️</button>
-              </div>
-            </div>
-            <div class="attachments-area">
-              <div class="attachments-title">📄 Memorial de Cálculo</div>
-              ${renderPdfRow('memorial', 'Memorial', memorialFile, item.id)}
-              <div class="attachments-title" style="margin-top: 1rem;">📅 Documentos Mensais</div>
-              ${monthNames.map((month, idx) => renderPdfRow(monthKeys[idx], month, monthlyFiles[idx], item.id)).join('')}
-            </div>
-          </div>
-        `;
-      }
-      container.innerHTML = html;
+    };
 
-      // Eventos dinâmicos
-      document.querySelectorAll('.delete-item').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          const id = Number(btn.dataset.id);
-          if (confirm('Excluir este item e todos os PDFs?')) {
-            await deleteItemAndFiles(id);
-            renderDashboard();
-          }
-        });
-      });
-      document.querySelectorAll('.edit-item').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          const id = Number(btn.dataset.id);
-          await openEditModal(id);
-        });
-      });
-      document.querySelectorAll('.upload-pdf-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          const itemId = Number(btn.dataset.itemid);
-          const category = btn.dataset.category;
-          const input = document.createElement('input');
-          input.type = 'file';
-          input.accept = '.pdf';
-          input.onchange = async (ev) => {
-            const file = ev.target.files[0];
-            if (file && file.type === 'application/pdf') {
-              try {
-                await addFileToItem(itemId, category, file);
-                renderDashboard();
-              } catch (err) {
-                alert('Erro ao adicionar PDF: ' + err.message);
-              }
-            } else if (file) alert('Selecione um PDF.');
-          };
-          input.click();
-        });
-      });
-      document.querySelectorAll('.remove-pdf-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          const fileId = Number(btn.dataset.fileid);
-          if (confirm('Remover este PDF?')) {
-            await deleteFileById(fileId);
-            renderDashboard();
-          }
-        });
-      });
-    } catch (err) {
-      console.error('Erro ao renderizar:', err);
-      container.innerHTML = `<div class="empty-state">Erro ao carregar dados. Verifique o console.</div>`;
-    }
-  }
-
-  // ==================== MODAL ====================
-  const modal = document.getElementById('itemModal');
-  const modalTitle = document.getElementById('modalTitle');
-  const itemNameInput = document.getElementById('itemName');
-  const itemCodeInput = document.getElementById('itemCode');
-  const codeErrorDiv = document.getElementById('codeError');
-  const memorialFileInput = document.getElementById('memorialFile');
-  const monthlyFilesContainer = document.getElementById('monthlyFilesContainer');
-  const saveItemBtn = document.getElementById('saveItemBtn');
-  const closeModalBtn = document.getElementById('closeModalBtn');
-  const editItemIdField = document.getElementById('editItemId');
-
-  function buildMonthlyInputs() {
-    monthlyFilesContainer.innerHTML = '';
-    monthNames.forEach((month, idx) => {
-      const div = document.createElement('div');
-      div.className = 'month-group';
-      const label = document.createElement('label');
-      label.textContent = month + ':';
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.pdf';
-      input.id = `month_${monthKeys[idx]}`;
-      input.setAttribute('data-month-key', monthKeys[idx]);
-      div.appendChild(label);
-      div.appendChild(input);
-      monthlyFilesContainer.appendChild(div);
-    });
-  }
-  buildMonthlyInputs();
-
-  async function openCreateModal() {
-    editingItemId = null;
-    modalTitle.innerText = '➕ Novo Item';
-    itemNameInput.value = '';
-    itemCodeInput.value = '';
-    codeErrorDiv.innerText = '';
-    memorialFileInput.value = '';
-    monthKeys.forEach(key => {
-      const inp = document.getElementById(`month_${key}`);
-      if (inp) inp.value = '';
-    });
-    editItemIdField.value = '';
-    modal.style.display = 'flex';
-  }
-
-  async function openEditModal(itemId) {
-    const items = await getAllItemsWithFiles();
-    const item = items.find(i => i.id === itemId);
-    if (!item) return;
-    editingItemId = itemId;
-    modalTitle.innerText = '✏️ Editar Item';
-    itemNameInput.value = item.name;
-    itemCodeInput.value = item.code;
-    codeErrorDiv.innerText = '';
-    editItemIdField.value = itemId;
-    memorialFileInput.value = '';
-    monthKeys.forEach(key => {
-      const inp = document.getElementById(`month_${key}`);
-      if (inp) inp.value = '';
-    });
-    modal.style.display = 'flex';
-  }
-
-  saveItemBtn.addEventListener('click', async () => {
-    const name = itemNameInput.value.trim();
-    const code = itemCodeInput.value.trim();
-    if (!name || !code) {
-      alert('Preencha Nome e Código do item');
-      return;
-    }
-    codeErrorDiv.innerText = '';
-
-    const filesToProcess = [];
-    if (memorialFileInput.files.length > 0) {
-      filesToProcess.push({ category: 'memorial', file: memorialFileInput.files[0] });
-    } else {
-      filesToProcess.push({ category: 'memorial', file: null });
-    }
-    for (let i = 0; i < monthKeys.length; i++) {
-      const key = monthKeys[i];
-      const input = document.getElementById(`month_${key}`);
-      if (input && input.files.length > 0) {
-        filesToProcess.push({ category: key, file: input.files[0] });
-      } else {
-        filesToProcess.push({ category: key, file: null });
-      }
-    }
-
-    try {
-      await saveItemComplete(editingItemId, name, code, filesToProcess);
-      modal.style.display = 'none';
-      renderDashboard();
-    } catch (err) {
-      console.error(err);
-      if (err.message.includes('código')) {
-        codeErrorDiv.innerText = err.message;
-      } else {
-        alert(`Erro ao salvar: ${err.message}`);
-      }
-    }
-  });
-
-  closeModalBtn.addEventListener('click', () => {
-    modal.style.display = 'none';
-  });
-
-  document.getElementById('addItemBtn').addEventListener('click', openCreateModal);
-  document.getElementById('logoutBtn').addEventListener('click', () => {
-    window.location.href = 'index.html';
-  });
-
-  window.addEventListener('DOMContentLoaded', () => {
-    renderDashboard();
-  });
-</script>
+    carregarItens();
+  </script>
 </body>
 </html>
