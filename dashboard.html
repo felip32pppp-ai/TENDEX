@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard | Cadastro com Memorial e Mensais</title>
+  <title>Dashboard | Cadastro Compartilhado</title>
   <style>
     * { margin:0; padding:0; box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f3f6fc; padding: 2rem 1.5rem; }
@@ -52,12 +52,14 @@
     .btn-cancel { background: #e2e8f0; color: #1e293b; padding: 0.5rem 1.2rem; border-radius: 2rem; border: none; cursor: pointer; }
     .notice { font-size: 0.7rem; color: #5b6e8c; margin-top: 0.8rem; text-align: center; }
     .error-text { color: #dc2626; font-size: 0.75rem; margin-top: 0.25rem; }
+    .loading { text-align: center; padding: 2rem; color: #1e4a76; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
 <div class="dashboard-header">
-  <h1>📁 Itens com Memorial + Mensais (Jan–Dez)</h1>
+  <h1>📁 Itens Compartilhados (Memorial + Mensais)</h1>
   <button class="logout-btn" id="logoutBtn">Sair</button>
 </div>
 
@@ -94,549 +96,421 @@
 </div>
 
 <script>
-  (function() {
-    // ---------- CONSTANTES ----------
-    const DB_NAME = 'ItemPDFMemorialDB';
-    const DB_VERSION = 7;
-    const STORE_ITEMS = 'items';
-    const STORE_FILES = 'files';
-    const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-    const monthKeys = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  // ==================== CONFIGURAÇÃO SUPABASE ====================
+  const SUPABASE_URL = "https://jklcvyuxwxgsfczrfaco.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_oCE8y5qaLovVj0BU-rANHA__Zmy3XVl";
 
-    let db = null;
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // ---------- ABRIR BANCO DE DADOS ----------
-    async function openDB() {
-      if (db && db.name === DB_NAME) return db;
-      return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-        request.onerror = (e) => reject(request.error);
-        request.onsuccess = (e) => {
-          db = request.result;
-          resolve(db);
-        };
-        request.onupgradeneeded = (e) => {
-          const dbUp = e.target.result;
-          if (dbUp.objectStoreNames.contains(STORE_ITEMS)) dbUp.deleteObjectStore(STORE_ITEMS);
-          if (dbUp.objectStoreNames.contains(STORE_FILES)) dbUp.deleteObjectStore(STORE_FILES);
-          const itemStore = dbUp.createObjectStore(STORE_ITEMS, { keyPath: 'id', autoIncrement: true });
-          itemStore.createIndex('by_code', 'code', { unique: true });
-          const fileStore = dbUp.createObjectStore(STORE_FILES, { keyPath: 'id', autoIncrement: true });
-          fileStore.createIndex('by_item_cat', ['itemId', 'category'], { unique: true });
-        };
-      });
+  // Constantes dos meses
+  const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  const monthKeys = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+  let editingItemId = null;
+
+  // ==================== FUNÇÕES SUPABASE ====================
+  async function getAllItemsWithFiles() {
+    const { data: items, error: itemsError } = await supabase
+      .from('items')
+      .select('*')
+      .order('id', { ascending: true });
+    if (itemsError) throw itemsError;
+
+    const { data: files, error: filesError } = await supabase
+      .from('files')
+      .select('*');
+    if (filesError) throw filesError;
+
+    const filesByItem = {};
+    files.forEach(file => {
+      if (!filesByItem[file.item_id]) filesByItem[file.item_id] = [];
+      filesByItem[file.item_id].push(file);
+    });
+
+    return items.map(item => ({
+      id: item.id,
+      name: item.name,
+      code: item.code,
+      files: filesByItem[item.id] || []
+    }));
+  }
+
+  async function saveItemComplete(itemId, name, code, filesToProcess) {
+    // 1. Verificar duplicidade de código
+    const { data: existing, error: dupError } = await supabase
+      .from('items')
+      .select('id')
+      .eq('code', code)
+      .maybeSingle();
+    if (dupError) throw dupError;
+    if (existing && existing.id !== itemId) {
+      throw new Error(`O código "${code}" já está em uso.`);
     }
 
-    // ---------- FUNÇÕES AUXILIARES ----------
-    function readFileAsBuffer(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = (e) => reject(e);
-        reader.readAsArrayBuffer(file);
-      });
-    }
-
-    // Função principal: salvar item completo (incluindo arquivos)
-    // Recebe itemId (null para novo), name, code, e um array de { category, file } (file pode ser null para manter)
-    // Retorna o itemId salvo
-    async function saveItemComplete(itemId, name, code, filesToProcess) {
-      // 1. Verificar duplicidade de código ANTES de iniciar transação
-      const isDuplicate = await isCodeDuplicate(code, itemId);
-      if (isDuplicate) {
-        throw new Error(`O código "${code}" já está em uso. Escolha um código único.`);
-      }
-
-      // 2. Ler todos os arquivos para buffer (fora da transação)
-      const filesBuffer = [];
-      for (const item of filesToProcess) {
-        if (item.file) {
-          const buffer = await readFileAsBuffer(item.file);
-          filesBuffer.push({
-            category: item.category,
-            fileName: item.file.name,
-            fileType: item.file.type,
-            fileSize: item.file.size,
-            blob: buffer
-          });
-        } else {
-          filesBuffer.push({ category: item.category, file: null }); // manter existente
-        }
-      }
-
-      const dbConn = await openDB();
-      return new Promise((resolve, reject) => {
-        const tx = dbConn.transaction([STORE_ITEMS, STORE_FILES], 'readwrite');
-        const itemStore = tx.objectStore(STORE_ITEMS);
-        const fileStore = tx.objectStore(STORE_FILES);
-        const fileIndex = fileStore.index('by_item_cat');
-
-        let newItemId = itemId;
-
-        // Função para processar após salvar o item
-        const processAfterItem = () => {
-          // Para cada categoria, deletar arquivo existente (se houver) e adicionar novo se fornecido
-          // Precisamos fazer as operações sequencialmente dentro da transação, mas sem async/await dentro dela.
-          // Vamos usar um loop com pedidos encadeados usando callbacks ou promises, mas como estamos dentro de uma transação,
-          // devemos aguardar cada operação. A abordagem é usar um Promise resolve no final.
-          // Vamos usar um contador e um array de promessas.
-          const promises = [];
-          for (const item of filesBuffer) {
-            if (item.file !== null) {
-              // Deletar existente se houver
-              const deletePromise = new Promise((resDel, rejDel) => {
-                const getRequest = fileIndex.get([newItemId, item.category]);
-                getRequest.onsuccess = () => {
-                  const existing = getRequest.result;
-                  if (existing) {
-                    const delReq = fileStore.delete(existing.id);
-                    delReq.onsuccess = () => resDel();
-                    delReq.onerror = () => rejDel(delReq.error);
-                  } else {
-                    resDel();
-                  }
-                };
-                getRequest.onerror = () => rejDel(getRequest.error);
-              });
-              promises.push(deletePromise.then(() => {
-                // Adicionar novo
-                return new Promise((resAdd, rejAdd) => {
-                  const newFile = {
-                    itemId: newItemId,
-                    category: item.category,
-                    fileName: item.fileName,
-                    fileType: item.fileType,
-                    fileSize: item.fileSize,
-                    blob: item.blob,
-                    updatedAt: new Date().toISOString()
-                  };
-                  const addReq = fileStore.add(newFile);
-                  addReq.onsuccess = () => resAdd();
-                  addReq.onerror = () => rejAdd(addReq.error);
-                });
-              }));
-            }
-          }
-          Promise.all(promises).then(() => resolve(newItemId)).catch(reject);
-        };
-
-        // Salvar ou atualizar item
-        const item = { name, code };
-        if (newItemId) item.id = newItemId;
-        const itemRequest = itemStore.put(item);
-        itemRequest.onsuccess = (e) => {
-          newItemId = e.target.result;
-          processAfterItem();
-        };
-        itemRequest.onerror = () => reject(itemRequest.error);
-        tx.onerror = () => reject(tx.error);
-      });
-    }
-
-    // Verificar duplicidade de código (usando transaction readonly)
-    async function isCodeDuplicate(code, excludeId = null) {
-      const dbConn = await openDB();
-      return new Promise((resolve, reject) => {
-        const tx = dbConn.transaction(STORE_ITEMS, 'readonly');
-        const store = tx.objectStore(STORE_ITEMS);
-        const index = store.index('by_code');
-        const request = index.get(code);
-        request.onsuccess = () => {
-          const existing = request.result;
-          if (existing && existing.id !== excludeId) {
-            resolve(true);
-          } else {
-            resolve(false);
-          }
-        };
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    // Função para adicionar um arquivo avulso a um item existente
-    async function addFileToItem(itemId, category, file) {
-      // Ler o arquivo primeiro
-      const buffer = await readFileAsBuffer(file);
-      const dbConn = await openDB();
-      return new Promise((resolve, reject) => {
-        const tx = dbConn.transaction(STORE_FILES, 'readwrite');
-        const fileStore = tx.objectStore(STORE_FILES);
-        const index = fileStore.index('by_item_cat');
-
-        // Primeiro, deletar se já existir
-        const getRequest = index.get([itemId, category]);
-        getRequest.onsuccess = () => {
-          const existing = getRequest.result;
-          const deletePromise = existing ? new Promise((resDel, rejDel) => {
-            const delReq = fileStore.delete(existing.id);
-            delReq.onsuccess = () => resDel();
-            delReq.onerror = () => rejDel(delReq.error);
-          }) : Promise.resolve();
-
-          deletePromise.then(() => {
-            const newFile = {
-              itemId,
-              category,
-              fileName: file.name,
-              fileType: file.type,
-              fileSize: file.size,
-              blob: buffer,
-              updatedAt: new Date().toISOString()
-            };
-            const addReq = fileStore.add(newFile);
-            addReq.onsuccess = () => resolve(addReq.result);
-            addReq.onerror = () => reject(addReq.error);
-          }).catch(reject);
-        };
-        getRequest.onerror = () => reject(getRequest.error);
-        tx.onerror = () => reject(tx.error);
-      });
-    }
-
-    // Obter todos os arquivos de um item
-    async function getFilesForItem(itemId) {
-      const dbConn = await openDB();
-      return new Promise((resolve, reject) => {
-        const tx = dbConn.transaction(STORE_FILES, 'readonly');
-        const store = tx.objectStore(STORE_FILES);
-        const index = store.index('by_item_cat');
-        const range = IDBKeyRange.bound([itemId, ''], [itemId, '\uffff']);
-        const files = [];
-        const cursor = index.openCursor(range);
-        cursor.onsuccess = (e) => {
-          const c = e.target.result;
-          if (c) {
-            files.push(c.value);
-            c.continue();
-          } else {
-            resolve(files);
-          }
-        };
-        cursor.onerror = () => reject(cursor.error);
-      });
-    }
-
-    // Excluir item e todos os seus arquivos
-    async function deleteItemAndFiles(itemId) {
-      const dbConn = await openDB();
-      const files = await getFilesForItem(itemId);
-      const fileIds = files.map(f => f.id);
-      const tx = dbConn.transaction([STORE_ITEMS, STORE_FILES], 'readwrite');
-      const itemStore = tx.objectStore(STORE_ITEMS);
-      const fileStore = tx.objectStore(STORE_FILES);
-      itemStore.delete(itemId);
-      fileIds.forEach(id => fileStore.delete(id));
-      return new Promise((resolve, reject) => {
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
-    }
-
-    // Excluir um único arquivo pelo ID
-    async function deleteFileById(fileId) {
-      const dbConn = await openDB();
-      const tx = dbConn.transaction(STORE_FILES, 'readwrite');
-      const store = tx.objectStore(STORE_FILES);
-      return new Promise((resolve, reject) => {
-        const request = store.delete(fileId);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    // Carregar todos os itens com seus arquivos
-    async function getAllItemsWithFiles() {
-      const dbConn = await openDB();
-      const items = await new Promise((resolve, reject) => {
-        const tx = dbConn.transaction(STORE_ITEMS, 'readonly');
-        const store = tx.objectStore(STORE_ITEMS);
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-      const itemsWithFiles = [];
-      for (const item of items) {
-        const files = await getFilesForItem(item.id);
-        itemsWithFiles.push({ ...item, files });
-      }
-      return itemsWithFiles;
-    }
-
-    // ---------- RENDERIZAÇÃO ----------
-    function escapeHtml(str) {
-      if (!str) return '';
-      return str.replace(/[&<>]/g, function(m) {
-        if (m === '&') return '&amp;';
-        if (m === '<') return '&lt;';
-        if (m === '>') return '&gt;';
-        return m;
-      });
-    }
-
-    function renderPdfRow(category, label, file, itemId) {
-      if (file) {
-        return `
-          <div class="pdf-row">
-            <span class="pdf-label">${escapeHtml(label)}</span>
-            <div class="pdf-file-info">
-              <a href="#" data-fileid="${file.id}">📄 ${escapeHtml(file.fileName)}</a>
-            </div>
-            <div class="pdf-actions">
-              <button class="upload-pdf-btn" data-itemid="${itemId}" data-category="${category}" data-label="${label}" title="Substituir PDF">🔄</button>
-              <button class="remove-pdf-btn" data-fileid="${file.id}" title="Remover">✖</button>
-            </div>
-          </div>
-        `;
+    // 2. Upload dos arquivos para Storage (se houver)
+    const uploadedUrls = [];
+    for (const item of filesToProcess) {
+      if (item.file) {
+        const fileExt = item.file.name.split('.').pop();
+        const tempId = itemId || 'temp';
+        const filePath = `itens/${tempId}/${item.category}_${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from('pdfs')
+          .upload(filePath, item.file);
+        if (uploadError) throw uploadError;
+        const { data: publicUrlData } = supabase.storage.from('pdfs').getPublicUrl(filePath);
+        uploadedUrls.push({
+          category: item.category,
+          url: publicUrlData.publicUrl,
+          fileName: item.file.name
+        });
       } else {
-        return `
-          <div class="pdf-row">
-            <span class="pdf-label">${escapeHtml(label)}</span>
-            <div class="pdf-file-info">— Nenhum PDF anexado —</div>
-            <div class="pdf-actions">
-              <button class="upload-pdf-btn" data-itemid="${itemId}" data-category="${category}" data-label="${label}" title="Adicionar PDF">➕</button>
-            </div>
+        uploadedUrls.push({ category: item.category, url: null });
+      }
+    }
+
+    // 3. Salvar/atualizar o item
+    let itemIdFinal = itemId;
+    if (itemId) {
+      const { error: updateError } = await supabase
+        .from('items')
+        .update({ name, code })
+        .eq('id', itemId);
+      if (updateError) throw updateError;
+    } else {
+      const { data: newItem, error: insertError } = await supabase
+        .from('items')
+        .insert({ name, code })
+        .select()
+        .single();
+      if (insertError) throw insertError;
+      itemIdFinal = newItem.id;
+    }
+
+    // 4. Inserir/atualizar registros de arquivos
+    for (const fileInfo of uploadedUrls) {
+      if (fileInfo.url) {
+        const { data: existingFile, error: findError } = await supabase
+          .from('files')
+          .select('id')
+          .eq('item_id', itemIdFinal)
+          .eq('category', fileInfo.category)
+          .maybeSingle();
+        if (findError) throw findError;
+
+        if (existingFile) {
+          const { error: updFileError } = await supabase
+            .from('files')
+            .update({ file_name: fileInfo.fileName, file_url: fileInfo.url })
+            .eq('id', existingFile.id);
+          if (updFileError) throw updFileError;
+        } else {
+          const { error: insFileError } = await supabase
+            .from('files')
+            .insert({
+              item_id: itemIdFinal,
+              category: fileInfo.category,
+              file_name: fileInfo.fileName,
+              file_url: fileInfo.url
+            });
+          if (insFileError) throw insFileError;
+        }
+      }
+    }
+
+    return itemIdFinal;
+  }
+
+  async function addFileToItem(itemId, category, file) {
+    const fileExt = file.name.split('.').pop();
+    const filePath = `itens/${itemId}/${category}_${Date.now()}.${fileExt}`;
+    const { error: uploadError } = await supabase.storage
+      .from('pdfs')
+      .upload(filePath, file);
+    if (uploadError) throw uploadError;
+    const { data: publicUrlData } = supabase.storage.from('pdfs').getPublicUrl(filePath);
+    const fileUrl = publicUrlData.publicUrl;
+
+    const { data: existing, error: findError } = await supabase
+      .from('files')
+      .select('id')
+      .eq('item_id', itemId)
+      .eq('category', category)
+      .maybeSingle();
+    if (findError) throw findError;
+
+    if (existing) {
+      const { error: updateError } = await supabase
+        .from('files')
+        .update({ file_name: file.name, file_url: fileUrl })
+        .eq('id', existing.id);
+      if (updateError) throw updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from('files')
+        .insert({
+          item_id: itemId,
+          category: category,
+          file_name: file.name,
+          file_url: fileUrl
+        });
+      if (insertError) throw insertError;
+    }
+  }
+
+  async function deleteFileById(fileId) {
+    const { error } = await supabase.from('files').delete().eq('id', fileId);
+    if (error) throw error;
+  }
+
+  async function deleteItemAndFiles(itemId) {
+    const { error } = await supabase.from('items').delete().eq('id', itemId);
+    if (error) throw error;
+  }
+
+  // ==================== RENDERIZAÇÃO ====================
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+      if (m === '&') return '&amp;';
+      if (m === '<') return '&lt;';
+      if (m === '>') return '&gt;';
+      return m;
+    });
+  }
+
+  function renderPdfRow(category, label, file, itemId) {
+    if (file) {
+      return `
+        <div class="pdf-row">
+          <span class="pdf-label">${escapeHtml(label)}</span>
+          <div class="pdf-file-info">
+            <a href="${file.file_url}" target="_blank">📄 ${escapeHtml(file.file_name)}</a>
           </div>
-        `;
-      }
+          <div class="pdf-actions">
+            <button class="upload-pdf-btn" data-itemid="${itemId}" data-category="${category}" data-label="${label}" title="Substituir PDF">🔄</button>
+            <button class="remove-pdf-btn" data-fileid="${file.id}" title="Remover">✖</button>
+          </div>
+        </div>
+      `;
+    } else {
+      return `
+        <div class="pdf-row">
+          <span class="pdf-label">${escapeHtml(label)}</span>
+          <div class="pdf-file-info">— Nenhum PDF anexado —</div>
+          <div class="pdf-actions">
+            <button class="upload-pdf-btn" data-itemid="${itemId}" data-category="${category}" data-label="${label}" title="Adicionar PDF">➕</button>
+          </div>
+        </div>
+      `;
     }
+  }
 
-    async function renderDashboard() {
-      const container = document.getElementById('itemsContainer');
-      try {
-        const items = await getAllItemsWithFiles();
-        if (items.length === 0) {
-          container.innerHTML = `<div class="empty-state">✨ Nenhum item cadastrado. Clique no botão + para adicionar.</div>`;
-          return;
-        }
-        let html = '';
-        for (const item of items) {
-          const files = item.files;
-          const memorialFile = files.find(f => f.category === 'memorial');
-          const monthlyFiles = monthKeys.map(key => files.find(f => f.category === key));
-          html += `
-            <div class="item-card" data-item-id="${item.id}">
-              <div class="item-header">
-                <div class="item-info">
-                  <h3>📌 ${escapeHtml(item.name)}</h3>
-                  <p>ID: ${escapeHtml(item.code)}</p>
-                </div>
-                <div>
-                  <button class="edit-item" data-id="${item.id}" title="Editar item">✏️</button>
-                  <button class="delete-item" data-id="${item.id}" title="Excluir item">🗑️</button>
-                </div>
-              </div>
-              <div class="attachments-area">
-                <div class="attachments-title">📄 Memorial de Cálculo</div>
-                ${renderPdfRow('memorial', 'Memorial', memorialFile, item.id)}
-                <div class="attachments-title" style="margin-top: 1rem;">📅 Documentos Mensais</div>
-                ${monthNames.map((month, idx) => renderPdfRow(monthKeys[idx], month, monthlyFiles[idx], item.id)).join('')}
-              </div>
-            </div>
-          `;
-        }
-        container.innerHTML = html;
-
-        // Eventos dinâmicos
-        document.querySelectorAll('.delete-item').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            const id = Number(btn.dataset.id);
-            if (confirm('Excluir este item e todos os PDFs?')) {
-              await deleteItemAndFiles(id);
-              renderDashboard();
-            }
-          });
-        });
-        document.querySelectorAll('.edit-item').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            const id = Number(btn.dataset.id);
-            await openEditModal(id);
-          });
-        });
-        document.querySelectorAll('.pdf-file-info a').forEach(link => {
-          link.addEventListener('click', async (e) => {
-            e.preventDefault();
-            const fileId = Number(link.dataset.fileid);
-            const dbConn = await openDB();
-            const tx = dbConn.transaction(STORE_FILES, 'readonly');
-            const store = tx.objectStore(STORE_FILES);
-            const getReq = store.get(fileId);
-            getReq.onsuccess = () => {
-              const fileRecord = getReq.result;
-              if (fileRecord && fileRecord.blob) {
-                const blob = new Blob([fileRecord.blob], { type: 'application/pdf' });
-                const url = URL.createObjectURL(blob);
-                window.open(url, '_blank');
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-              } else {
-                alert('Arquivo não encontrado');
-              }
-            };
-            getReq.onerror = () => alert('Erro ao carregar PDF');
-          });
-        });
-        document.querySelectorAll('.upload-pdf-btn').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            const itemId = Number(btn.dataset.itemid);
-            const category = btn.dataset.category;
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.pdf';
-            input.onchange = async (ev) => {
-              const file = ev.target.files[0];
-              if (file && file.type === 'application/pdf') {
-                await addFileToItem(itemId, category, file);
-                renderDashboard();
-              } else if (file) alert('Selecione um PDF.');
-            };
-            input.click();
-          });
-        });
-        document.querySelectorAll('.remove-pdf-btn').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const fileId = Number(btn.dataset.fileid);
-            if (confirm('Remover este PDF?')) {
-              await deleteFileById(fileId);
-              renderDashboard();
-            }
-          });
-        });
-      } catch (err) {
-        console.error('Erro ao renderizar dashboard:', err);
-        container.innerHTML = `<div class="empty-state">Erro ao carregar dados. Verifique o console.</div>`;
-      }
-    }
-
-    // ---------- MODAL ----------
-    const modal = document.getElementById('itemModal');
-    const modalTitle = document.getElementById('modalTitle');
-    const itemNameInput = document.getElementById('itemName');
-    const itemCodeInput = document.getElementById('itemCode');
-    const codeErrorDiv = document.getElementById('codeError');
-    const memorialFileInput = document.getElementById('memorialFile');
-    const monthlyFilesContainer = document.getElementById('monthlyFilesContainer');
-    const saveItemBtn = document.getElementById('saveItemBtn');
-    const closeModalBtn = document.getElementById('closeModalBtn');
-    const editItemIdField = document.getElementById('editItemId');
-
-    let editingItemId = null;
-
-    function buildMonthlyInputs() {
-      monthlyFilesContainer.innerHTML = '';
-      monthNames.forEach((month, idx) => {
-        const div = document.createElement('div');
-        div.className = 'month-group';
-        const label = document.createElement('label');
-        label.textContent = month + ':';
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.pdf';
-        input.id = `month_${monthKeys[idx]}`;
-        input.setAttribute('data-month-key', monthKeys[idx]);
-        div.appendChild(label);
-        div.appendChild(input);
-        monthlyFilesContainer.appendChild(div);
-      });
-    }
-    buildMonthlyInputs();
-
-    async function openCreateModal() {
-      editingItemId = null;
-      modalTitle.innerText = '➕ Novo Item';
-      itemNameInput.value = '';
-      itemCodeInput.value = '';
-      codeErrorDiv.innerText = '';
-      memorialFileInput.value = '';
-      monthKeys.forEach(key => {
-        const inp = document.getElementById(`month_${key}`);
-        if (inp) inp.value = '';
-      });
-      editItemIdField.value = '';
-      modal.style.display = 'flex';
-    }
-
-    async function openEditModal(itemId) {
+  async function renderDashboard() {
+    const container = document.getElementById('itemsContainer');
+    container.innerHTML = '<div class="loading">Carregando dados...</div>';
+    try {
       const items = await getAllItemsWithFiles();
-      const item = items.find(i => i.id === itemId);
-      if (!item) return;
-      editingItemId = itemId;
-      modalTitle.innerText = '✏️ Editar Item';
-      itemNameInput.value = item.name;
-      itemCodeInput.value = item.code;
-      codeErrorDiv.innerText = '';
-      editItemIdField.value = itemId;
-      memorialFileInput.value = '';
-      monthKeys.forEach(key => {
-        const inp = document.getElementById(`month_${key}`);
-        if (inp) inp.value = '';
-      });
-      modal.style.display = 'flex';
-    }
-
-    saveItemBtn.addEventListener('click', async () => {
-      const name = itemNameInput.value.trim();
-      const code = itemCodeInput.value.trim();
-      if (!name || !code) {
-        alert('Preencha Nome e Código do item');
+      if (items.length === 0) {
+        container.innerHTML = `<div class="empty-state">✨ Nenhum item cadastrado. Clique no botão + para adicionar.</div>`;
         return;
       }
-      codeErrorDiv.innerText = '';
+      let html = '';
+      for (const item of items) {
+        const files = item.files;
+        const memorialFile = files.find(f => f.category === 'memorial');
+        const monthlyFiles = monthKeys.map(key => files.find(f => f.category === key));
+        html += `
+          <div class="item-card" data-item-id="${item.id}">
+            <div class="item-header">
+              <div class="item-info">
+                <h3>📌 ${escapeHtml(item.name)}</h3>
+                <p>ID: ${escapeHtml(item.code)}</p>
+              </div>
+              <div>
+                <button class="edit-item" data-id="${item.id}" title="Editar item">✏️</button>
+                <button class="delete-item" data-id="${item.id}" title="Excluir item">🗑️</button>
+              </div>
+            </div>
+            <div class="attachments-area">
+              <div class="attachments-title">📄 Memorial de Cálculo</div>
+              ${renderPdfRow('memorial', 'Memorial', memorialFile, item.id)}
+              <div class="attachments-title" style="margin-top: 1rem;">📅 Documentos Mensais</div>
+              ${monthNames.map((month, idx) => renderPdfRow(monthKeys[idx], month, monthlyFiles[idx], item.id)).join('')}
+            </div>
+          </div>
+        `;
+      }
+      container.innerHTML = html;
 
-      // Coletar arquivos a serem processados (apenas os que foram selecionados)
-      const filesToProcess = [];
+      // Eventos dinâmicos
+      document.querySelectorAll('.delete-item').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = Number(btn.dataset.id);
+          if (confirm('Excluir este item e todos os PDFs?')) {
+            await deleteItemAndFiles(id);
+            renderDashboard();
+          }
+        });
+      });
+      document.querySelectorAll('.edit-item').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = Number(btn.dataset.id);
+          await openEditModal(id);
+        });
+      });
+      document.querySelectorAll('.upload-pdf-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const itemId = Number(btn.dataset.itemid);
+          const category = btn.dataset.category;
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.pdf';
+          input.onchange = async (ev) => {
+            const file = ev.target.files[0];
+            if (file && file.type === 'application/pdf') {
+              try {
+                await addFileToItem(itemId, category, file);
+                renderDashboard();
+              } catch (err) {
+                alert('Erro ao adicionar PDF: ' + err.message);
+              }
+            } else if (file) alert('Selecione um PDF.');
+          };
+          input.click();
+        });
+      });
+      document.querySelectorAll('.remove-pdf-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const fileId = Number(btn.dataset.fileid);
+          if (confirm('Remover este PDF?')) {
+            await deleteFileById(fileId);
+            renderDashboard();
+          }
+        });
+      });
+    } catch (err) {
+      console.error('Erro ao renderizar:', err);
+      container.innerHTML = `<div class="empty-state">Erro ao carregar dados. Verifique o console.</div>`;
+    }
+  }
 
-      // Memorial
-      if (memorialFileInput.files.length > 0) {
-        filesToProcess.push({ category: 'memorial', file: memorialFileInput.files[0] });
+  // ==================== MODAL ====================
+  const modal = document.getElementById('itemModal');
+  const modalTitle = document.getElementById('modalTitle');
+  const itemNameInput = document.getElementById('itemName');
+  const itemCodeInput = document.getElementById('itemCode');
+  const codeErrorDiv = document.getElementById('codeError');
+  const memorialFileInput = document.getElementById('memorialFile');
+  const monthlyFilesContainer = document.getElementById('monthlyFilesContainer');
+  const saveItemBtn = document.getElementById('saveItemBtn');
+  const closeModalBtn = document.getElementById('closeModalBtn');
+  const editItemIdField = document.getElementById('editItemId');
+
+  function buildMonthlyInputs() {
+    monthlyFilesContainer.innerHTML = '';
+    monthNames.forEach((month, idx) => {
+      const div = document.createElement('div');
+      div.className = 'month-group';
+      const label = document.createElement('label');
+      label.textContent = month + ':';
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.pdf';
+      input.id = `month_${monthKeys[idx]}`;
+      input.setAttribute('data-month-key', monthKeys[idx]);
+      div.appendChild(label);
+      div.appendChild(input);
+      monthlyFilesContainer.appendChild(div);
+    });
+  }
+  buildMonthlyInputs();
+
+  async function openCreateModal() {
+    editingItemId = null;
+    modalTitle.innerText = '➕ Novo Item';
+    itemNameInput.value = '';
+    itemCodeInput.value = '';
+    codeErrorDiv.innerText = '';
+    memorialFileInput.value = '';
+    monthKeys.forEach(key => {
+      const inp = document.getElementById(`month_${key}`);
+      if (inp) inp.value = '';
+    });
+    editItemIdField.value = '';
+    modal.style.display = 'flex';
+  }
+
+  async function openEditModal(itemId) {
+    const items = await getAllItemsWithFiles();
+    const item = items.find(i => i.id === itemId);
+    if (!item) return;
+    editingItemId = itemId;
+    modalTitle.innerText = '✏️ Editar Item';
+    itemNameInput.value = item.name;
+    itemCodeInput.value = item.code;
+    codeErrorDiv.innerText = '';
+    editItemIdField.value = itemId;
+    memorialFileInput.value = '';
+    monthKeys.forEach(key => {
+      const inp = document.getElementById(`month_${key}`);
+      if (inp) inp.value = '';
+    });
+    modal.style.display = 'flex';
+  }
+
+  saveItemBtn.addEventListener('click', async () => {
+    const name = itemNameInput.value.trim();
+    const code = itemCodeInput.value.trim();
+    if (!name || !code) {
+      alert('Preencha Nome e Código do item');
+      return;
+    }
+    codeErrorDiv.innerText = '';
+
+    const filesToProcess = [];
+    if (memorialFileInput.files.length > 0) {
+      filesToProcess.push({ category: 'memorial', file: memorialFileInput.files[0] });
+    } else {
+      filesToProcess.push({ category: 'memorial', file: null });
+    }
+    for (let i = 0; i < monthKeys.length; i++) {
+      const key = monthKeys[i];
+      const input = document.getElementById(`month_${key}`);
+      if (input && input.files.length > 0) {
+        filesToProcess.push({ category: key, file: input.files[0] });
       } else {
-        filesToProcess.push({ category: 'memorial', file: null }); // manter existente
+        filesToProcess.push({ category: key, file: null });
       }
+    }
 
-      // Meses
-      for (let i = 0; i < monthKeys.length; i++) {
-        const key = monthKeys[i];
-        const input = document.getElementById(`month_${key}`);
-        if (input && input.files.length > 0) {
-          filesToProcess.push({ category: key, file: input.files[0] });
-        } else {
-          filesToProcess.push({ category: key, file: null });
-        }
-      }
-
-      try {
-        const savedId = await saveItemComplete(editingItemId, name, code, filesToProcess);
-        modal.style.display = 'none';
-        renderDashboard();
-      } catch (err) {
-        console.error('Erro ao salvar item:', err);
-        if (err.message.includes('código')) {
-          codeErrorDiv.innerText = err.message;
-        } else {
-          alert(`Erro ao salvar item: ${err.message || 'Verifique o console para mais detalhes.'}`);
-        }
-      }
-    });
-
-    closeModalBtn.addEventListener('click', () => {
+    try {
+      await saveItemComplete(editingItemId, name, code, filesToProcess);
       modal.style.display = 'none';
-    });
-
-    document.getElementById('addItemBtn').addEventListener('click', openCreateModal);
-    document.getElementById('logoutBtn').addEventListener('click', () => {
-      window.location.href = 'index.html';
-    });
-
-    // Inicialização
-    window.addEventListener('DOMContentLoaded', async () => {
-      try {
-        await openDB();
-        await renderDashboard();
-      } catch (err) {
-        console.error('Falha na inicialização:', err);
-        alert('Erro ao inicializar o banco de dados. Consulte o console.');
+      renderDashboard();
+    } catch (err) {
+      console.error(err);
+      if (err.message.includes('código')) {
+        codeErrorDiv.innerText = err.message;
+      } else {
+        alert(`Erro ao salvar: ${err.message}`);
       }
-    });
-  })();
+    }
+  });
+
+  closeModalBtn.addEventListener('click', () => {
+    modal.style.display = 'none';
+  });
+
+  document.getElementById('addItemBtn').addEventListener('click', openCreateModal);
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    window.location.href = 'index.html';
+  });
+
+  window.addEventListener('DOMContentLoaded', () => {
+    renderDashboard();
+  });
 </script>
 </body>
 </html>
