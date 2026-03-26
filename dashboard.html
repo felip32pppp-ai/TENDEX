@@ -17,7 +17,7 @@
       padding: 2rem 1.5rem;
     }
 
-    /* cabeçalho */
+    /* Cabeçalho */
     .dashboard-header {
       display: flex;
       justify-content: space-between;
@@ -51,51 +51,47 @@
       background: #dc2626;
     }
 
-    /* barra de pesquisa */
+    /* Barra de pesquisa */
     .search-bar {
-      margin-bottom: 2rem;
       display: flex;
-      gap: 0.5rem;
-      align-items: center;
+      justify-content: center;
+      margin-bottom: 2rem;
+    }
+
+    .search-container {
+      display: flex;
       background: white;
-      padding: 0.5rem 1rem;
-      border-radius: 3rem;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+      border-radius: 2rem;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
       border: 1px solid #e2e8f0;
+      overflow: hidden;
+      width: 100%;
+      max-width: 400px;
     }
 
-    .search-icon {
-      font-size: 1.2rem;
-      color: #5b6e8c;
-    }
-
-    .search-input {
+    .search-container input {
       flex: 1;
+      padding: 0.8rem 1.2rem;
       border: none;
       outline: none;
-      font-size: 1rem;
-      padding: 0.5rem 0;
-      background: transparent;
+      font-size: 0.95rem;
     }
 
-    .search-input::placeholder {
-      color: #94a3b8;
-    }
-
-    .clear-search {
-      background: none;
+    .search-container button {
+      background: #1e4a76;
       border: none;
+      padding: 0 1.2rem;
       cursor: pointer;
-      font-size: 1rem;
-      color: #94a3b8;
-      padding: 0 0.3rem;
+      color: white;
+      font-size: 1.2rem;
+      transition: background 0.2s;
     }
 
-    .clear-search:hover {
-      color: #ef4444;
+    .search-container button:hover {
+      background: #0f2b3d;
     }
 
-    /* grid de cards (itens resumidos) */
+    /* Grid de cards */
     .items-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -103,97 +99,191 @@
       margin-top: 1rem;
     }
 
-    /* card resumido */
-    .item-card-summary {
+    .item-card {
       background: white;
-      border-radius: 1.5rem;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      border-radius: 1rem;
       padding: 1.2rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
       cursor: pointer;
       transition: all 0.2s;
       border: 1px solid #e2edff;
-      text-align: center;
     }
 
-    .item-card-summary:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+    .item-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 20px rgba(0, 0, 0, 0.1);
       border-color: #3b82f6;
     }
 
-    .item-card-summary h3 {
+    .item-card h3 {
       font-size: 1.2rem;
+      font-weight: 600;
       color: #0f172a;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.3rem;
     }
 
-    .item-card-summary p {
+    .item-card p {
       font-size: 0.85rem;
-      color: #4b5563;
+      color: #5b6e8c;
     }
 
-    /* card expandido (detalhes do item) */
-    .item-card-expanded {
+    .empty-state {
+      text-align: center;
+      color: #6c86a3;
+      margin-top: 4rem;
+    }
+
+    /* Botão flutuante + */
+    .fab {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: linear-gradient(135deg, #0f2b3d, #1e4a76);
+      color: white;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      cursor: pointer;
+      border: none;
+      z-index: 10;
+    }
+
+    .fab:hover {
+      transform: scale(1.05);
+    }
+
+    /* Modal padrão */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
       background: white;
+      max-width: 600px;
+      width: 90%;
       border-radius: 1.5rem;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
-      margin-top: 1rem;
-      margin-bottom: 1.5rem;
-      border: 1px solid #e2edff;
-      overflow: hidden;
+      padding: 1.5rem;
+      max-height: 85vh;
+      overflow-y: auto;
     }
 
-    .item-header {
-      background: #f8fafc;
-      padding: 1rem 1.2rem;
-      border-bottom: 1px solid #e2e8f0;
+    .modal-content h2 {
+      margin-bottom: 1rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      cursor: pointer;
     }
 
-    .item-info h3 {
-      font-size: 1.2rem;
-      color: #0f172a;
-    }
-
-    .item-info p {
-      font-size: 0.8rem;
-      color: #4b5563;
-      margin-top: 0.2rem;
-    }
-
-    .item-actions {
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    .edit-item, .delete-item {
+    .modal-content h2 button {
       background: none;
       border: none;
-      font-size: 1.2rem;
+      font-size: 1.5rem;
       cursor: pointer;
-      padding: 0.3rem;
-      border-radius: 50%;
+      color: #94a3b8;
     }
 
-    .edit-item { color: #3b82f6; }
-    .edit-item:hover { background: #e0f2fe; }
-    .delete-item { color: #94a3b8; }
-    .delete-item:hover { color: #dc2626; background: #fee2e2; }
-
-    .attachments-area {
-      padding: 1rem 1.2rem;
+    .form-group {
+      margin-bottom: 1rem;
     }
 
-    .attachments-title {
-      font-size: 0.8rem;
+    .form-group label {
+      display: block;
       font-weight: 600;
-      color: #334155;
-      margin-bottom: 0.8rem;
+      margin-bottom: 0.3rem;
+      font-size: 0.85rem;
+    }
+
+    .form-group input[type="text"] {
+      width: 100%;
+      padding: 0.6rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 1rem;
+    }
+
+    .month-group {
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .month-group label {
+      font-weight: 600;
+      width: 110px;
+      font-size: 0.8rem;
+    }
+
+    .month-group input[type="file"] {
+      flex: 1;
+    }
+
+    .modal-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.8rem;
+      margin-top: 1.2rem;
+    }
+
+    .btn-save {
+      background: #1e4a76;
+      color: white;
+      padding: 0.5rem 1.2rem;
+      border-radius: 2rem;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-cancel {
+      background: #e2e8f0;
+      color: #1e293b;
+      padding: 0.5rem 1.2rem;
+      border-radius: 2rem;
+      border: none;
+      cursor: pointer;
+    }
+
+    .notice {
+      font-size: 0.7rem;
+      color: #5b6e8c;
+      margin-top: 0.8rem;
+      text-align: center;
+    }
+
+    .error-text {
+      color: #dc2626;
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+    }
+
+    /* PDF rows dentro do modal de detalhes */
+    .detail-attachments {
+      margin-top: 1rem;
+    }
+
+    .detail-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .detail-section h3 {
+      font-size: 1rem;
       border-left: 3px solid #3b82f6;
       padding-left: 0.6rem;
+      margin-bottom: 0.8rem;
     }
 
     .pdf-row {
@@ -271,146 +361,10 @@
       color: #dc2626;
     }
 
-    .empty-state {
-      text-align: center;
-      color: #6c86a3;
-      margin-top: 4rem;
-    }
-
-    .fab {
-      position: fixed;
-      bottom: 2rem;
-      right: 2rem;
-      background: linear-gradient(135deg, #0f2b3d, #1e4a76);
-      color: white;
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 2rem;
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-      cursor: pointer;
-      border: none;
-      z-index: 10;
-    }
-
-    .fab:hover {
-      transform: scale(1.05);
-    }
-
-    .modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    }
-
-    .modal-content {
-      background: white;
-      max-width: 550px;
-      width: 90%;
-      border-radius: 1.5rem;
-      padding: 1.5rem;
-      max-height: 85vh;
-      overflow-y: auto;
-    }
-
-    .modal-content h2 {
-      margin-bottom: 1rem;
-    }
-
-    .form-group {
-      margin-bottom: 1rem;
-    }
-
-    .form-group label {
-      display: block;
-      font-weight: 600;
-      margin-bottom: 0.3rem;
-      font-size: 0.85rem;
-    }
-
-    .form-group input[type="text"] {
-      width: 100%;
-      padding: 0.6rem;
-      border: 1px solid #cbd5e1;
-      border-radius: 1rem;
-    }
-
-    .month-group {
-      margin-bottom: 1rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .month-group label {
-      font-weight: 600;
-      width: 110px;
-      font-size: 0.8rem;
-    }
-
-    .month-group input[type="file"] {
-      flex: 1;
-    }
-
-    .modal-buttons {
-      display: flex;
-      justify-content: flex-end;
-      gap: 0.8rem;
-      margin-top: 1.2rem;
-    }
-
-    .btn-save {
-      background: #1e4a76;
-      color: white;
-      padding: 0.5rem 1.2rem;
-      border-radius: 2rem;
-      border: none;
-      cursor: pointer;
-    }
-
-    .btn-cancel {
-      background: #e2e8f0;
-      color: #1e293b;
-      padding: 0.5rem 1.2rem;
-      border-radius: 2rem;
-      border: none;
-      cursor: pointer;
-    }
-
-    .notice {
-      font-size: 0.7rem;
-      color: #5b6e8c;
-      margin-top: 0.8rem;
-      text-align: center;
-    }
-
-    .error-text {
-      color: #dc2626;
-      font-size: 0.75rem;
-      margin-top: 0.25rem;
-    }
-
     .loading {
       text-align: center;
       padding: 2rem;
       color: #1e4a76;
-    }
-
-    .expand-icon {
-      font-size: 1rem;
-      margin-left: 0.5rem;
-      color: #3b82f6;
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -422,17 +376,18 @@
   <button class="logout-btn" id="logoutBtn">Sair</button>
 </div>
 
-<!-- Barra de pesquisa -->
 <div class="search-bar">
-  <span class="search-icon">🔍</span>
-  <input type="text" id="searchInput" class="search-input" placeholder="Pesquisar por ID ou nome...">
-  <button id="clearSearch" class="clear-search" title="Limpar busca">✖</button>
+  <div class="search-container">
+    <input type="text" id="searchInput" placeholder="Pesquisar por ID ou Nome...">
+    <button id="searchBtn">🔍</button>
+  </div>
 </div>
 
 <div id="itemsContainer" class="items-grid"></div>
+
 <button class="fab" id="addItemBtn">+</button>
 
-<!-- Modal para criação/edição -->
+<!-- Modal para criação/edição de item -->
 <div id="itemModal" class="modal">
   <div class="modal-content">
     <h2 id="modalTitle">➕ Novo Item</h2>
@@ -461,6 +416,17 @@
   </div>
 </div>
 
+<!-- Modal de detalhes do item (exibe PDFs) -->
+<div id="detailModal" class="modal">
+  <div class="modal-content">
+    <h2>
+      <span id="detailTitle">Detalhes do Item</span>
+      <button id="closeDetailBtn">&times;</button>
+    </h2>
+    <div id="detailContent"></div>
+  </div>
+</div>
+
 <script>
   (function() {
     // ==================== CONFIGURAÇÃO SUPABASE ====================
@@ -469,13 +435,11 @@
 
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Constantes dos meses
     const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
     const monthKeys = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
     let editingItemId = null;
-    let allItems = []; // guarda todos os itens com seus arquivos
-    let expandedItemId = null; // id do item expandido
+    let allItems = []; // armazena todos os itens para filtro
 
     // ==================== FUNÇÕES SUPABASE ====================
     async function getAllItemsWithFiles() {
@@ -505,7 +469,6 @@
     }
 
     async function saveItemComplete(itemId, name, code, filesToProcess) {
-      // 1. Verificar duplicidade de código
       const { data: existing, error: dupError } = await supabase
         .from('items')
         .select('id')
@@ -516,7 +479,6 @@
         throw new Error(`O código "${code}" já está em uso.`);
       }
 
-      // 2. Upload dos arquivos para Storage (se houver)
       const uploadedUrls = [];
       for (const item of filesToProcess) {
         if (item.file) {
@@ -538,7 +500,6 @@
         }
       }
 
-      // 3. Salvar/atualizar o item
       let itemIdFinal = itemId;
       if (itemId) {
         const { error: updateError } = await supabase
@@ -556,7 +517,6 @@
         itemIdFinal = newItem.id;
       }
 
-      // 4. Inserir/atualizar registros de arquivos
       for (const fileInfo of uploadedUrls) {
         if (fileInfo.url) {
           const { data: existingFile, error: findError } = await supabase
@@ -635,10 +595,9 @@
     async function deleteItemAndFiles(itemId) {
       const { error } = await supabase.from('items').delete().eq('id', itemId);
       if (error) throw error;
-      if (expandedItemId === itemId) expandedItemId = null;
     }
 
-    // ==================== RENDERIZAÇÃO ====================
+    // ==================== RENDERIZAÇÃO DOS CARDS ====================
     function escapeHtml(str) {
       if (!str) return '';
       return str.replace(/[&<>]/g, function(m) {
@@ -649,7 +608,56 @@
       });
     }
 
-    // Renderiza os PDFs de um item expandido
+    async function renderCards(filterText = '') {
+      const container = document.getElementById('itemsContainer');
+      container.innerHTML = '<div class="loading">Carregando...</div>';
+      try {
+        allItems = await getAllItemsWithFiles();
+        let filteredItems = allItems;
+        if (filterText.trim() !== '') {
+          const searchLower = filterText.toLowerCase();
+          filteredItems = allItems.filter(item =>
+            item.code.toLowerCase().includes(searchLower) ||
+            item.name.toLowerCase().includes(searchLower)
+          );
+        }
+
+        if (filteredItems.length === 0) {
+          container.innerHTML = `<div class="empty-state">✨ Nenhum item encontrado.</div>`;
+          return;
+        }
+
+        let html = '';
+        for (const item of filteredItems) {
+          html += `
+            <div class="item-card" data-id="${item.id}">
+              <h3>${escapeHtml(item.name)}</h3>
+              <p>ID: ${escapeHtml(item.code)}</p>
+            </div>
+          `;
+        }
+        container.innerHTML = html;
+
+        // Adicionar evento de clique nos cards
+        document.querySelectorAll('.item-card').forEach(card => {
+          card.addEventListener('click', (e) => {
+            const itemId = Number(card.dataset.id);
+            const item = allItems.find(i => i.id === itemId);
+            if (item) openDetailModal(item);
+          });
+        });
+      } catch (err) {
+        console.error('Erro ao renderizar cards:', err);
+        container.innerHTML = `<div class="empty-state">Erro ao carregar dados. Verifique o console.</div>`;
+      }
+    }
+
+    // ==================== MODAL DE DETALHES ====================
+    const detailModal = document.getElementById('detailModal');
+    const detailTitle = document.getElementById('detailTitle');
+    const detailContent = document.getElementById('detailContent');
+    const closeDetailBtn = document.getElementById('closeDetailBtn');
+
     function renderPdfRow(category, label, file, itemId) {
       if (file) {
         return `
@@ -677,154 +685,78 @@
       }
     }
 
-    // Renderiza o card expandido de um item específico
-    function renderExpandedItem(item) {
+    async function openDetailModal(item) {
+      detailTitle.innerText = `${escapeHtml(item.name)} (ID: ${escapeHtml(item.code)})`;
       const files = item.files;
       const memorialFile = files.find(f => f.category === 'memorial');
       const monthlyFiles = monthKeys.map(key => files.find(f => f.category === key));
-      return `
-        <div class="item-card-expanded" data-item-id="${item.id}">
-          <div class="item-header" data-toggle-expand="${item.id}">
-            <div class="item-info">
-              <h3>📌 ${escapeHtml(item.name)}</h3>
-              <p>ID: ${escapeHtml(item.code)}</p>
-            </div>
-            <div class="item-actions">
-              <button class="edit-item" data-id="${item.id}" title="Editar item">✏️</button>
-              <button class="delete-item" data-id="${item.id}" title="Excluir item">🗑️</button>
-              <span class="expand-icon">▼</span>
-            </div>
-          </div>
-          <div class="attachments-area">
-            <div class="attachments-title">📄 Memorial de Cálculo</div>
+
+      let html = `
+        <div class="detail-attachments">
+          <div class="detail-section">
+            <h3>📄 Memorial de Cálculo</h3>
             ${renderPdfRow('memorial', 'Memorial', memorialFile, item.id)}
-            <div class="attachments-title" style="margin-top: 1rem;">📅 Documentos Mensais</div>
+          </div>
+          <div class="detail-section">
+            <h3>📅 Documentos Mensais</h3>
             ${monthNames.map((month, idx) => renderPdfRow(monthKeys[idx], month, monthlyFiles[idx], item.id)).join('')}
           </div>
         </div>
       `;
-    }
+      detailContent.innerHTML = html;
+      detailModal.style.display = 'flex';
 
-    // Renderiza o card resumido (apenas nome e código)
-    function renderSummaryCard(item) {
-      return `
-        <div class="item-card-summary" data-toggle-expand="${item.id}">
-          <h3>${escapeHtml(item.name)}</h3>
-          <p>ID: ${escapeHtml(item.code)}</p>
-        </div>
-      `;
-    }
-
-    // Função principal de renderização com filtro
-    async function renderDashboard() {
-      const container = document.getElementById('itemsContainer');
-      container.innerHTML = '<div class="loading">Carregando dados...</div>';
-      try {
-        // Recarrega os dados do Supabase
-        allItems = await getAllItemsWithFiles();
-        const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
-        
-        // Filtrar itens pelo código ou nome
-        let filteredItems = allItems;
-        if (searchTerm) {
-          filteredItems = allItems.filter(item => 
-            item.code.toLowerCase().includes(searchTerm) || 
-            item.name.toLowerCase().includes(searchTerm)
-          );
-        }
-
-        if (filteredItems.length === 0) {
-          container.innerHTML = `<div class="empty-state">✨ Nenhum item encontrado.</div>`;
-          return;
-        }
-
-        // Se houver um item expandido, mostrar ele em formato expandido, e os demais em resumo
-        // Porém, a abordagem mais simples: mostrar todos em resumo, exceto o expandido
-        let html = '';
-        for (const item of filteredItems) {
-          if (expandedItemId === item.id) {
-            html += renderExpandedItem(item);
-          } else {
-            html += renderSummaryCard(item);
-          }
-        }
-        container.innerHTML = html;
-
-        // Anexar eventos de toggle (expandir/recolher)
-        document.querySelectorAll('[data-toggle-expand]').forEach(el => {
-          el.addEventListener('click', (e) => {
-            // Evitar que o clique em botões internos dispare o toggle
-            if (e.target.closest('.edit-item') || e.target.closest('.delete-item') || e.target.closest('.upload-pdf-btn') || e.target.closest('.remove-pdf-btn')) {
-              return;
-            }
-            const itemId = Number(el.dataset.toggleExpand);
-            if (expandedItemId === itemId) {
-              expandedItemId = null; // recolhe
-            } else {
-              expandedItemId = itemId; // expande outro
-            }
-            renderDashboard(); // re-renderiza com novo estado
-          });
+      // Anexar eventos após renderizar
+      detailContent.querySelectorAll('.upload-pdf-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const itemId = Number(btn.dataset.itemid);
+          const category = btn.dataset.category;
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.pdf';
+          input.onchange = async (ev) => {
+            const file = ev.target.files[0];
+            if (file && file.type === 'application/pdf') {
+              try {
+                await addFileToItem(itemId, category, file);
+                // Atualiza o modal com os novos dados
+                const updatedItem = (await getAllItemsWithFiles()).find(i => i.id === itemId);
+                if (updatedItem) openDetailModal(updatedItem);
+                // Atualiza os cards também
+                renderCards(document.getElementById('searchInput').value);
+              } catch (err) {
+                alert('Erro ao adicionar PDF: ' + err.message);
+              }
+            } else if (file) alert('Selecione um PDF.');
+          };
+          input.click();
         });
+      });
 
-        // Eventos de editar/excluir (os botões foram gerados dentro do expanded, se houver)
-        document.querySelectorAll('.edit-item').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const id = Number(btn.dataset.id);
-            await openEditModal(id);
-          });
-        });
-        document.querySelectorAll('.delete-item').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const id = Number(btn.dataset.id);
-            if (confirm('Excluir este item e todos os PDFs?')) {
-              await deleteItemAndFiles(id);
-              expandedItemId = null;
-              renderDashboard();
-            }
-          });
-        });
-        document.querySelectorAll('.upload-pdf-btn').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const itemId = Number(btn.dataset.itemid);
-            const category = btn.dataset.category;
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.pdf';
-            input.onchange = async (ev) => {
-              const file = ev.target.files[0];
-              if (file && file.type === 'application/pdf') {
-                try {
-                  await addFileToItem(itemId, category, file);
-                  renderDashboard();
-                } catch (err) {
-                  alert('Erro ao adicionar PDF: ' + err.message);
-                }
-              } else if (file) alert('Selecione um PDF.');
-            };
-            input.click();
-          });
-        });
-        document.querySelectorAll('.remove-pdf-btn').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const fileId = Number(btn.dataset.fileid);
-            if (confirm('Remover este PDF?')) {
+      detailContent.querySelectorAll('.remove-pdf-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const fileId = Number(btn.dataset.fileid);
+          if (confirm('Remover este PDF?')) {
+            try {
               await deleteFileById(fileId);
-              renderDashboard();
+              // Atualiza o modal
+              const updatedItem = (await getAllItemsWithFiles()).find(i => i.id === item.id);
+              if (updatedItem) openDetailModal(updatedItem);
+              renderCards(document.getElementById('searchInput').value);
+            } catch (err) {
+              alert('Erro ao remover PDF: ' + err.message);
             }
-          });
+          }
         });
-      } catch (err) {
-        console.error('Erro ao renderizar:', err);
-        container.innerHTML = `<div class="empty-state">Erro ao carregar dados. Verifique o console.</div>`;
-      }
+      });
     }
 
-    // ==================== MODAL ====================
+    closeDetailBtn.onclick = () => {
+      detailModal.style.display = 'none';
+    };
+
+    // ==================== MODAL DE CRIAÇÃO/EDIÇÃO ====================
     const modal = document.getElementById('itemModal');
     const modalTitle = document.getElementById('modalTitle');
     const itemNameInput = document.getElementById('itemName');
@@ -871,7 +803,6 @@
     }
 
     async function openEditModal(itemId) {
-      // Buscar dados atualizados
       const items = await getAllItemsWithFiles();
       const item = items.find(i => i.id === itemId);
       if (!item) return;
@@ -917,9 +848,8 @@
       try {
         await saveItemComplete(editingItemId, name, code, filesToProcess);
         modal.style.display = 'none';
-        // após salvar, limpa expansão para não deixar estado inconsistente
-        expandedItemId = null;
-        renderDashboard();
+        // Recarregar cards mantendo o filtro atual
+        renderCards(document.getElementById('searchInput').value);
       } catch (err) {
         console.error(err);
         if (err.message.includes('código')) {
@@ -934,28 +864,27 @@
       modal.style.display = 'none';
     });
 
+    // Eventos de pesquisa
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+
+    function performSearch() {
+      renderCards(searchInput.value);
+    }
+
+    searchBtn.addEventListener('click', performSearch);
+    searchInput.addEventListener('keyup', (e) => {
+      if (e.key === 'Enter') performSearch();
+    });
+
     document.getElementById('addItemBtn').addEventListener('click', openCreateModal);
     document.getElementById('logoutBtn').addEventListener('click', () => {
       window.location.href = 'index.html';
     });
 
-    // Barra de pesquisa
-    const searchInput = document.getElementById('searchInput');
-    const clearSearchBtn = document.getElementById('clearSearch');
-
-    searchInput.addEventListener('input', () => {
-      expandedItemId = null; // recolhe qualquer item expandido ao filtrar
-      renderDashboard();
-    });
-    clearSearchBtn.addEventListener('click', () => {
-      searchInput.value = '';
-      expandedItemId = null;
-      renderDashboard();
-    });
-
     // Inicialização
     window.addEventListener('DOMContentLoaded', () => {
-      renderDashboard();
+      renderCards('');
     });
   })();
 </script>
