@@ -317,7 +317,7 @@
         }
         const credsList = parseCredentialsFile(fileContent);
         if (credsList.length === 0) {
-          throw new Error(`Nenhuma credencial válida encontrada em "${CREDENTIALS_FILE}". Use o formato usuario:senha (ex: MOVO:123)`);
+          throw new Error(`Nenhuma credencial válida encontrada em "${CREDENTIALS_FILE}". Use o formato usuario:senha (ex: LAYLA:123)`);
         }
         return credsList;
       } catch (err) {
