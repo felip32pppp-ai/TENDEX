@@ -338,104 +338,56 @@
       return itemIdFinal;
     }
 
-    // ==================== GERAR PDF COM LAYOUT PADRÃO (VERSÃO DEFINITIVA) ====================
+    // ==================== GERAR PDF USANDO O MODELO (PREENCHE CAMPOS) ====================
+    const MODELO_PDF_URL = "https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/pdfs/modelo_checklist.pdf";
+
     async function generateAndAttachPdf(itemId, category, monthName, formData) {
       try {
         if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
-        const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
-        const pdfDoc = await PDFDocument.create();
-        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        const { PDFDocument } = window.PDFLib;
 
-        const pageWidth = 595;
-        const pageHeight = 842;
-        let page = pdfDoc.addPage([pageWidth, pageHeight]);
-        let y = pageHeight - 50;
-        const margin = 50;
-        const lineHeight = 16;
-        const colX = { num: margin, pergunta: margin + 35, resposta: margin + 420, observacao: margin + 480 };
+        // 1. Baixar o modelo PDF
+        const modelBytes = await fetch(MODELO_PDF_URL).then(res => res.arrayBuffer());
+        const pdfDoc = await PDFDocument.load(modelBytes);
+        const form = pdfDoc.getForm();
 
-        function checkY() {
-          if (isNaN(y)) y = pageHeight - 50;
-          if (y < 50) {
-            page = pdfDoc.addPage([pageWidth, pageHeight]);
-            y = pageHeight - 50;
-            page.drawText("Nº", { x: colX.num, y: y, size: 10, font: boldFont });
-            page.drawText("Pergunta", { x: colX.pergunta, y: y, size: 10, font: boldFont });
-            page.drawText("Resposta", { x: colX.resposta, y: y, size: 10, font: boldFont });
-            page.drawText("Observação", { x: colX.observacao, y: y, size: 10, font: boldFont });
-            y -= 5;
-            page.drawLine({ start: { x: margin, y: y+2 }, end: { x: pageWidth - margin, y: y+2 }, thickness: 1, color: rgb(0,0,0) });
-            y -= 12;
-          }
+        // 2. Preencher campos de texto do cabeçalho
+        const camposTexto = {
+          localidade: formData.localidade || "",
+          latitude: formData.latitude || "0,00000000000",
+          longitude: formData.longitude || "0,00000000000",
+          resp_nome: formData.resp_nome || "",
+          resp_matricula: formData.resp_matricula || "",
+          data_inspecao: formData.data_inspecao || "",
+          empresa: formData.empresa || "",
+          inspetor_nome: formData.inspetor_nome || "",
+          inspetor_matricula: formData.inspetor_matricula || "",
+          inspetor_cpf: formData.inspetor_cpf || "",
+          inspetor_sap: formData.inspetor_sap || "",
+          inspetor_nome2: formData.inspetor_nome2 || "",
+          entrevistados: formData.entrevistados || ""
+        };
+        for (const [nome, valor] of Object.entries(camposTexto)) {
+          try {
+            const field = form.getTextField(nome);
+            field.setText(valor);
+          } catch (e) { /* campo não existe no modelo, ignorar */ }
         }
 
-        // Cabeçalho
-        page.drawText("Formulário Padrão", { x: margin, y: y, size: 14, font: boldFont });
-        y -= 20;
-        page.drawText("VALE", { x: margin, y: y, size: 12, font: boldFont, color: rgb(0,0.4,0.6) });
-        y -= 20;
-        page.drawText("Inspeção de SSMA em Tendas e Galpões Lonados", { x: margin, y: y, size: 12, font: boldFont });
-        y -= 25;
-
-        const campos = [
-          `Nome da Localidade: ${formData.localidade || ''}`,
-          `Latitude (GD): ${formData.latitude || '0,00000000000'}`,
-          `Longitude (GD): ${formData.longitude || '0,00000000000'}`,
-          `Responsável pelo Preenchimento - Nome: ${formData.resp_nome || ''}`,
-          `Responsável pelo Preenchimento - Matrícula: ${formData.resp_matricula || ''}`,
-          `Data da Inspeção: ${formData.data_inspecao || ''}`,
-          `Empresa: ${formData.empresa || ''}`,
-          `Inspetor/Auditor: ${formData.inspetor_nome || ''}`,
-          `Matrícula: ${formData.inspetor_matricula || ''}`,
-          `CPF: ${formData.inspetor_cpf || ''}`,
-          `SAP ID: ${formData.inspetor_sap || ''}`,
-          `Nome do Inspetor: ${formData.inspetor_nome2 || ''}`,
-          `Entrevistados: ${formData.entrevistados || ''}`
-        ];
-        for (const campo of campos) {
-          checkY();
-          page.drawText(campo, { x: margin, y: y, size: 9, font: font });
-          y -= 14;
-        }
-        y -= 10;
-        checkY();
-
-        // Cabeçalho da tabela
-        page.drawText("Nº", { x: colX.num, y: y, size: 10, font: boldFont });
-        page.drawText("Pergunta", { x: colX.pergunta, y: y, size: 10, font: boldFont });
-        page.drawText("Resposta", { x: colX.resposta, y: y, size: 10, font: boldFont });
-        page.drawText("Observação", { x: colX.observacao, y: y, size: 10, font: boldFont });
-        y -= 5;
-        page.drawLine({ start: { x: margin, y: y+2 }, end: { x: pageWidth - margin, y: y+2 }, thickness: 1, color: rgb(0,0,0) });
-        y -= 12;
-
+        // 3. Preencher respostas das perguntas (campos resp1 a resp25)
         for (let i = 0; i < checklistPerguntas.length; i++) {
-          checkY();
-          const pergunta = checklistPerguntas[i];
           const resposta = formData[`resp_${i}`] || "Não respondido";
-          const obs = formData[`obs_${i}`] || "";
-          page.drawText(`${i+1}`, { x: colX.num, y: y, size: 9, font: font });
-          let perguntaStr = pergunta.length > 70 ? pergunta.substring(0, 67) + "..." : pergunta;
-          page.drawText(perguntaStr, { x: colX.pergunta, y: y, size: 8, font: font });
-          let respColor = rgb(0,0,0);
-          if (resposta === "Conforme") respColor = rgb(0,0.6,0);
-          else if (resposta === "Não conforme") respColor = rgb(0.8,0,0);
-          else if (resposta === "Não se aplica") respColor = rgb(0.5,0.5,0.5);
-          page.drawText(resposta, { x: colX.resposta, y: y, size: 8, font: boldFont, color: respColor });
-          let obsStr = obs.length > 20 ? obs.substring(0, 17) + "..." : obs;
-          page.drawText(obsStr, { x: colX.observacao, y: y, size: 8, font: font });
-          y -= lineHeight;
+          try {
+            const field = form.getTextField(`resp${i+1}`);
+            field.setText(resposta);
+          } catch (e) { /* campo não existe */ }
         }
 
-        const pages = pdfDoc.getPages();
-        pages.forEach((pg, idx) => {
-          pg.drawText(`Página ${idx+1} de ${pages.length}`, { x: margin, y: 30, size: 8, font: font, color: rgb(0.5,0.5,0.5) });
-        });
-
+        // 4. Salvar o PDF preenchido
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const file = new File([blob], `checklist_${monthName}_${Date.now()}.pdf`, { type: 'application/pdf' });
+        
         await addFileToItem(itemId, category, file);
         alert(`PDF gerado e anexado ao mês ${monthName}!`);
         await refreshData();
