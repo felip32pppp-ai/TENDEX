@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TENDEX | Inspeção de Tendas</title>
   <style>
-    /* (todo o CSS permanece igual ao da versão anterior - omitido por brevidade, mas você deve manter o mesmo) */
     * { margin:0; padding:0; box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f3f6fc; padding: 2rem 1.5rem; }
     .dashboard-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; padding-bottom: 0.75rem; border-bottom: 2px solid #cbd5e1; }
@@ -339,7 +338,7 @@
       return itemIdFinal;
     }
 
-    // ==================== GERAR PDF USANDO O MODELO (COM CAMPOS) ====================
+    // ==================== GERAR PDF USANDO O MODELO (COM DIAGNÓSTICO) ====================
     const MODELO_PDF_URL = "https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/pdfs/modelo_checklist.pdf";
 
     async function generateAndAttachPdf(itemId, category, monthName, formData) {
@@ -352,53 +351,65 @@
         const pdfDoc = await PDFDocument.load(modelBytes);
         const form = pdfDoc.getForm();
 
-        // 2. Preencher campos de texto do cabeçalho (use os nomes EXATOS que você deu no PDFescape)
-        const camposTexto = {
-          localidade: formData.localidade || "",
-          latitude: formData.latitude || "0,00000000000",
-          longitude: formData.longitude || "0,00000000000",
-          resp_nome: formData.resp_nome || "",
-          resp_matricula: formData.resp_matricula || "",
-          data_inspecao: formData.data_inspecao || "",
-          empresa: formData.empresa || "",
-          inspetor_nome: formData.inspetor_nome || "",
-          inspetor_matricula: formData.inspetor_matricula || "",
-          inspetor_cpf: formData.inspetor_cpf || "",
-          inspetor_sap: formData.inspetor_sap || "",
-          inspetor_nome2: formData.inspetor_nome2 || "",
-          entrevistados: formData.entrevistados || ""
-        };
-        for (const [nome, valor] of Object.entries(camposTexto)) {
-          try {
-            const field = form.getTextField(nome);
-            field.setText(valor);
-          } catch (e) {
-            console.warn(`Campo "${nome}" não encontrado no PDF.`);
+        // 2. Listar campos disponíveis (diagnóstico)
+        const allFields = form.getFields().map(f => f.getName());
+        console.log("🔍 Campos encontrados no PDF:", allFields);
+
+        // 3. Função auxiliar para tentar preencher um campo com vários nomes possíveis
+        function trySetTextField(possibleNames, value) {
+          for (const name of possibleNames) {
+            try {
+              const field = form.getTextField(name);
+              field.setText(value);
+              console.log(`✅ Campo "${name}" preenchido com: ${value}`);
+              return true;
+            } catch (e) { /* ignora */ }
           }
+          console.warn(`⚠️ Nenhum campo encontrado para: ${possibleNames.join(", ")}`);
+          return false;
         }
 
-        // 3. Preencher respostas das perguntas (campos resp1 a resp25)
+        // 4. Mapeamento dos campos do cabeçalho (várias variações)
+        const camposCabecalho = [
+          { possiveisNomes: ["localidade", "Localidade", "LOCALIDADE", "Nome da Localidade"], valor: formData.localidade },
+          { possiveisNomes: ["latitude", "Latitude", "LATITUDE"], valor: formData.latitude || "0,00000000000" },
+          { possiveisNomes: ["longitude", "Longitude", "LONGITUDE"], valor: formData.longitude || "0,00000000000" },
+          { possiveisNomes: ["resp_nome", "RespNome", "RESP_NOME", "Responsável Nome"], valor: formData.resp_nome },
+          { possiveisNomes: ["resp_matricula", "RespMatricula", "RESP_MATRICULA", "Responsável Matrícula"], valor: formData.resp_matricula },
+          { possiveisNomes: ["data_inspecao", "DataInspecao", "DATA_INSPECAO", "Data da Inspeção"], valor: formData.data_inspecao },
+          { possiveisNomes: ["empresa", "Empresa", "EMPRESA"], valor: formData.empresa },
+          { possiveisNomes: ["inspetor_nome", "InspetorNome", "INSPETOR_NOME", "Inspetor/Auditor"], valor: formData.inspetor_nome },
+          { possiveisNomes: ["inspetor_matricula", "InspetorMatricula", "INSPETOR_MATRICULA", "Matrícula"], valor: formData.inspetor_matricula },
+          { possiveisNomes: ["inspetor_cpf", "InspetorCPF", "INSPETOR_CPF", "CPF"], valor: formData.inspetor_cpf },
+          { possiveisNomes: ["inspetor_sap", "InspetorSAP", "INSPETOR_SAP", "SAP ID"], valor: formData.inspetor_sap },
+          { possiveisNomes: ["inspetor_nome2", "InspetorNome2", "INSPETOR_NOME2", "Nome"], valor: formData.inspetor_nome2 },
+          { possiveisNomes: ["entrevistados", "Entrevistados", "ENTREVISTADOS"], valor: formData.entrevistados }
+        ];
+
+        for (const item of camposCabecalho) {
+          trySetTextField(item.possiveisNomes, item.valor);
+        }
+
+        // 5. Preencher respostas das perguntas (tenta resp1, resp2, ..., resp25 e variações)
         for (let i = 0; i < checklistPerguntas.length; i++) {
           const resposta = formData[`resp_${i}`] || "Não respondido";
-          try {
-            const field = form.getTextField(`resp${i+1}`);
-            field.setText(resposta);
-          } catch (e) {
-            console.warn(`Campo "resp${i+1}" não encontrado.`);
-          }
+          const possiveis = [
+            `resp${i+1}`, `Resp${i+1}`, `RESP${i+1}`, `resposta${i+1}`, `Resposta${i+1}`,
+            `pergunta${i+1}`, `Pergunta${i+1}`, `item${i+1}`, `Item${i+1}`
+          ];
+          trySetTextField(possiveis, resposta);
         }
 
-        // 4. Salvar o PDF preenchido
+        // 6. Salvar o PDF preenchido
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const file = new File([blob], `checklist_${monthName}_${Date.now()}.pdf`, { type: 'application/pdf' });
-        
         await addFileToItem(itemId, category, file);
         alert(`PDF gerado e anexado ao mês ${monthName}!`);
         await refreshData();
         await openDetailModal(itemId);
       } catch (err) {
-        console.error(err);
+        console.error("Erro na geração do PDF:", err);
         alert("Erro ao gerar PDF: " + err.message);
       }
     }
