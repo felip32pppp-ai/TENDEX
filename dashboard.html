@@ -28,13 +28,13 @@
     .fab { position: fixed; bottom: 2rem; right: 2rem; background: linear-gradient(135deg, #0f2b3d, #1e4a76); color: white; width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; box-shadow: 0 8px 16px rgba(0,0,0,0.2); cursor: pointer; border: none; z-index: 10; }
     .fab:hover { transform: scale(1.05); }
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000; }
-    .modal-content { background: white; max-width: 600px; width: 90%; border-radius: 1.5rem; padding: 1.5rem; max-height: 85vh; overflow-y: auto; }
+    .modal-content { background: white; max-width: 800px; width: 90%; border-radius: 1.5rem; padding: 1.5rem; max-height: 85vh; overflow-y: auto; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
     .modal-header h2 { font-size: 1.3rem; }
     .close-modal { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b; }
     .item-detail-title { background: #f1f5f9; padding: 0.8rem; border-radius: 1rem; margin-bottom: 1.2rem; }
     .pdf-group { margin-bottom: 1.2rem; }
-    .pdf-group-title { font-weight: 600; font-size: 0.9rem; border-left: 3px solid #3b82f6; padding-left: 0.6rem; margin-bottom: 0.5rem; }
+    .pdf-group-title { font-weight: 600; font-size: 0.9rem; border-left: 3px solid #3b82f6; padding-left: 0.6rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
     .pdf-row { display: flex; align-items: center; justify-content: space-between; background: #f9fafb; margin-bottom: 0.5rem; padding: 0.4rem 0.8rem; border-radius: 2rem; font-size: 0.75rem; }
     .pdf-label { font-weight: 600; background: #e2e8f0; padding: 0.2rem 0.6rem; border-radius: 2rem; min-width: 85px; text-align: center; }
     .pdf-file-info { flex: 1; margin: 0 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -44,6 +44,8 @@
     .upload-pdf-btn:hover { background: #e0f2fe; }
     .remove-pdf-btn { color: #9ca3af; }
     .remove-pdf-btn:hover { background: #fee2e2; color: #dc2626; }
+    .fill-form-btn { background: #10b981; color: white; border: none; border-radius: 2rem; padding: 0.2rem 0.6rem; font-size: 0.7rem; cursor: pointer; margin-left: 0.5rem; }
+    .fill-form-btn:hover { background: #059669; }
     .delete-item-btn { background: #ef4444; color: white; border: none; padding: 0.5rem 1rem; border-radius: 2rem; cursor: pointer; margin-top: 1rem; font-weight: 600; }
     .delete-item-btn:hover { background: #dc2626; }
     .notice { font-size: 0.7rem; color: #5b6e8c; margin-top: 1rem; text-align: center; }
@@ -51,7 +53,12 @@
     .error-text { color: #dc2626; font-size: 0.75rem; margin-top: 0.25rem; }
     .form-group { margin-bottom: 1rem; }
     .form-group label { display: block; font-weight: 600; margin-bottom: 0.3rem; font-size: 0.85rem; }
-    .form-group input[type="text"], .form-group input[type="text"] { width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 1rem; }
+    .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 1rem; font-family: inherit; }
+    .form-group textarea { min-height: 80px; resize: vertical; }
+    .question-item { margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #e2e8f0; }
+    .question-text { font-weight: 600; font-size: 0.85rem; margin-bottom: 0.3rem; }
+    .radio-group { display: flex; gap: 1rem; margin-top: 0.3rem; }
+    .radio-group label { font-weight: normal; display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; }
     .month-group { margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
     .month-group label { font-weight: 600; width: 110px; font-size: 0.8rem; }
     .month-group input[type="file"] { flex: 1; }
@@ -66,7 +73,7 @@
 <body>
 
 <div class="dashboard-header">
-  <h1>TENDEX</h1>
+  <h1>TENDEX Site para inspeção de tendas</h1>
   <button class="logout-btn" id="logoutBtn">Sair</button>
 </div>
 
@@ -91,7 +98,7 @@
       <button class="close-modal" id="closeCreateModalBtn">&times;</button>
     </div>
     <div class="form-group">
-      <label>Localização</label>
+      <label>Nome do Item *</label>
       <input type="text" id="newItemName" placeholder="Ex: Tenda 5x5">
     </div>
     <div class="form-group">
@@ -132,6 +139,21 @@
   </div>
 </div>
 
+<!-- Modal do formulário de checklist -->
+<div id="formModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="formModalTitle">Checklist de Inspeção</h2>
+      <button class="close-modal" id="closeFormModalBtn">&times;</button>
+    </div>
+    <div id="formFieldsContainer"></div>
+    <div class="modal-buttons">
+      <button class="btn-cancel" id="cancelFormBtn">Cancelar</button>
+      <button class="btn-save" id="generatePdfBtn">Gerar PDF e Anexar</button>
+    </div>
+  </div>
+</div>
+
 <script>
   (function() {
     // ==================== CONFIGURAÇÃO SUPABASE ====================
@@ -141,6 +163,39 @@
 
     const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
     const monthKeys = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+    // Lista de perguntas do checklist (baseada no PDF fornecido)
+    const questions = [
+      "As tendas/Galpões lonados possuem Projeto Estrutural e ART por engenheiro habilitado?",
+      "Possuem Projeto de SPDA e ART vigente? (tendas >25m²)",
+      "Possuem aterramento conforme projeto do canteiro?",
+      "Manual de instrução/montagem disponível na frente de serviço?",
+      "Possuem placa de liberação com data e responsável?",
+      "Possuem plano de inspeção aderente ao projeto? (tendas >25m²)",
+      "Formulário de inspeção anterior disponível? (tendas >25m²)",
+      "Estrutura de sustentação (aranha) em bom estado, parafusada, sem corrosão/deformação?",
+      "Cintas Poliéster tensionadas, sem deformação/cortes?",
+      "Colunas alinhadas perpendicularmente, sem corrosão/deformação?",
+      "Colunas encaixadas e parafusadas às vigas, com mão francesa?",
+      "Mãos francesas com parafusos autotravantes?",
+      "Distância segura de escavações/taludes (conforme projeto)?",
+      "Travas/parafusos sem sinais de corrosão ou folgas?",
+      "Vigas alinhadas perpendicularmente aos pilares, sem corrosão/deformação?",
+      "Cabos de aço tensionados, com clips e sapatilhas?",
+      "Estaiamento com cinta/cabo e catraca vinculada a chumbador? Ângulo mínimo 60°?",
+      "Pilares com pelo menos 02 chumbadores com ponto de solda?",
+      "Lona/sombrite lateral em bom estado, esticada e amarrada?",
+      "Lona/sombrite do teto em bom estado, esticada e amarrada?",
+      "Calhas e pilares vazados desobstruídos (se aplicável)?",
+      "Distância segura de rede elétrica/equipamentos/árvores?",
+      "Sinalização de saída de emergência e alarme (se aplicável)?",
+      "Sistema de iluminação instalado corretamente (se aplicável)?",
+      "Lona de cobertura sem deformação por acúmulo de água/folhas?"
+    ];
+
+    let currentFormItemId = null;
+    let currentFormCategory = null;
+    let currentFormMonthName = null;
 
     // ==================== FUNÇÕES DE BANCO ====================
     async function getAllItemsWithFiles() {
@@ -211,7 +266,6 @@
     }
 
     async function saveItemComplete(itemId, name, sub_localizacao, tamanho, code, filesToProcess) {
-      // Verificar duplicidade
       const { data: existing, error: dupError } = await supabase
         .from('items')
         .select('id')
@@ -222,7 +276,6 @@
         throw new Error(`O código "${code}" já está em uso.`);
       }
 
-      // Uploads
       const uploadedUrls = [];
       for (const item of filesToProcess) {
         if (item.file) {
@@ -281,54 +334,62 @@
       return itemIdFinal;
     }
 
-    // ==================== DOWNLOAD AGREGADO POR MÊS ====================
-    async function downloadMonthPDFs(category, monthName) {
+    // ==================== GERAR PDF COM CHECKLIST ====================
+    async function generateAndAttachPdf(itemId, category, monthName, answers) {
       try {
-        if (!window.PDFLib) {
-          alert("Biblioteca PDF-lib não carregada. Recarregue a página.");
-          return;
-        }
-        const { PDFDocument } = window.PDFLib;
-        const items = await getAllItemsWithFiles();
-        const filesToMerge = [];
-        for (const item of items) {
-          const file = item.files.find(f => f.category === category);
-          if (file && file.file_url) {
-            const response = await fetch(file.file_url);
-            if (!response.ok) continue;
-            const blob = await response.blob();
-            filesToMerge.push({ name: `${item.name} - ${item.code}.pdf`, blob });
+        if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
+        const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
+        const pdfDoc = await PDFDocument.create();
+        let page = pdfDoc.addPage([600, 800]);
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        
+        let y = 750;
+        const margin = 40;
+        const lineHeight = 16;
+        let currentPage = page;
+        
+        const addText = (text, size, fontType = font, colorRgb = rgb(0,0,0), xOffset = margin) => {
+          if (y < 50) {
+            currentPage = pdfDoc.addPage([600, 800]);
+            y = 750;
           }
-        }
-        if (filesToMerge.length === 0) {
-          alert(`Nenhum PDF encontrado para ${monthName}.`);
-          return;
+          currentPage.drawText(text, { x: xOffset, y: y, size: size, font: fontType, color: colorRgb });
+          y -= (size + 4);
+        };
+
+        addText(`Checklist de Inspeção - ${monthName}`, 16, boldFont, rgb(0,0,0));
+        addText(`Item: ${currentFormItemId ? 'ID: ' + currentFormItemId : ''}`, 10);
+        addText(`Data: ${new Date().toLocaleDateString()}`, 10);
+        y -= 10;
+
+        for (let i = 0; i < questions.length; i++) {
+          const q = questions[i];
+          const answer = answers[i] || 'Não respondido';
+          addText(`${i+1}. ${q}`, 9, boldFont, rgb(0,0,0));
+          addText(`   Resposta: ${answer}`, 9, font, rgb(0.2,0.2,0.2), margin + 10);
+          y -= 4;
         }
 
-        const mergedPdf = await PDFDocument.create();
-        for (const file of filesToMerge) {
-          const arrayBuffer = await file.blob.arrayBuffer();
-          const pdf = await PDFDocument.load(arrayBuffer);
-          const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
-          copiedPages.forEach(page => mergedPdf.addPage(page));
-        }
-        const mergedPdfBytes = await mergedPdf.save();
-        const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `todos_${monthName}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        addText(`\nResponsável pela inspeção: ${answers.responsavel || 'Não informado'}`, 10, boldFont);
+        addText(`Observações adicionais: ${answers.observacoes || 'Nenhuma'}`, 9);
+        addText(`Gerado automaticamente em: ${new Date().toLocaleString()}`, 8, font, rgb(0.5,0.5,0.5));
+        
+        const pdfBytes = await pdfDoc.save();
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const file = new File([blob], `checklist_${monthName}_${Date.now()}.pdf`, { type: 'application/pdf' });
+        
+        await addFileToItem(itemId, category, file);
+        alert(`Checklist gerado e anexado ao mês ${monthName}!`);
+        await refreshData();
+        await openDetailModal(itemId);
       } catch (err) {
         console.error(err);
-        alert(`Erro ao mesclar PDFs de ${monthName}: ${err.message}`);
+        alert("Erro ao gerar PDF: " + err.message);
       }
     }
 
-    // ==================== RENDERIZAÇÃO DA LISTA DE ITENS (CARDS) ====================
+    // ==================== RENDERIZAÇÃO ====================
     let currentItems = [];
 
     function renderCards(filterText = "") {
@@ -374,7 +435,7 @@
       renderCards(searchInput.value);
     }
 
-    // ==================== MODAL DE DETALHES DO ITEM ====================
+    // ==================== MODAL DE DETALHES ====================
     const detailModal = document.getElementById('detailModal');
     const detailContent = document.getElementById('detailContent');
     const closeDetailBtn = document.getElementById('closeDetailModalBtn');
@@ -409,10 +470,10 @@
         </div>
         <div class="pdf-group">
           <div class="pdf-group-title">📅 Documentos Mensais</div>
-          ${monthNames.map((month, idx) => renderDetailPdfRow(monthKeys[idx], month, monthlyFiles[idx], item.id)).join('')}
+          ${monthNames.map((month, idx) => renderDetailPdfRow(monthKeys[idx], month, monthlyFiles[idx], item.id, true)).join('')}
         </div>
         <button class="delete-item-btn" id="deleteItemFromDetailBtn">🗑️ Excluir este item</button>
-        <div class="notice">* Clique nos botões + para adicionar/substituir PDFs.</div>
+        <div class="notice">* Clique nos botões + para anexar/substituir PDFs. Clique em 📝 para preencher o checklist e gerar PDF.</div>
       `;
       detailContent.innerHTML = html;
 
@@ -451,6 +512,15 @@
         });
       });
 
+      document.querySelectorAll('.fill-form-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const itemId = Number(btn.dataset.itemid);
+          const category = btn.dataset.category;
+          const monthName = btn.dataset.monthname;
+          openFormModal(itemId, category, monthName);
+        });
+      });
+
       const deleteBtn = document.getElementById('deleteItemFromDetailBtn');
       if (deleteBtn) {
         deleteBtn.addEventListener('click', async () => {
@@ -463,7 +533,7 @@
       }
     }
 
-    function renderDetailPdfRow(category, label, file, itemId) {
+    function renderDetailPdfRow(category, label, file, itemId, showFormButton = false) {
       if (file) {
         return `
           <div class="pdf-row">
@@ -474,6 +544,7 @@
             <div class="pdf-actions">
               <button class="upload-pdf-btn" data-itemid="${itemId}" data-category="${category}" title="Substituir PDF">🔄</button>
               <button class="remove-pdf-btn" data-fileid="${file.id}" title="Remover">✖</button>
+              ${showFormButton ? `<button class="fill-form-btn" data-itemid="${itemId}" data-category="${category}" data-monthname="${label}" title="Preencher checklist">📝</button>` : ''}
             </div>
           </div>
         `;
@@ -484,14 +555,86 @@
             <div class="pdf-file-info">— Nenhum PDF anexado —</div>
             <div class="pdf-actions">
               <button class="upload-pdf-btn" data-itemid="${itemId}" data-category="${category}" title="Adicionar PDF">➕</button>
+              ${showFormButton ? `<button class="fill-form-btn" data-itemid="${itemId}" data-category="${category}" data-monthname="${label}" title="Preencher checklist">📝</button>` : ''}
             </div>
           </div>
         `;
       }
     }
 
-    closeDetailBtn.addEventListener('click', () => {
-      detailModal.style.display = 'none';
+    // ==================== MODAL DO CHECKLIST ====================
+    const formModal = document.getElementById('formModal');
+    const formModalTitle = document.getElementById('formModalTitle');
+    const formFieldsContainer = document.getElementById('formFieldsContainer');
+    const closeFormModalBtn = document.getElementById('closeFormModalBtn');
+    const cancelFormBtn = document.getElementById('cancelFormBtn');
+    const generatePdfBtn = document.getElementById('generatePdfBtn');
+
+    function openFormModal(itemId, category, monthName) {
+      currentFormItemId = itemId;
+      currentFormCategory = category;
+      currentFormMonthName = monthName;
+      formModalTitle.innerText = `Checklist de Inspeção - ${monthName}`;
+      
+      let html = `<div style="margin-bottom: 1rem;"><strong>Instruções:</strong> Marque a opção adequada para cada item.</div>`;
+      questions.forEach((q, idx) => {
+        html += `
+          <div class="question-item">
+            <div class="question-text">${idx+1}. ${escapeHtml(q)}</div>
+            <div class="radio-group">
+              <label><input type="radio" name="q${idx}" value="Conforme"> Conforme</label>
+              <label><input type="radio" name="q${idx}" value="Não conforme"> Não conforme</label>
+              <label><input type="radio" name="q${idx}" value="Não se aplica"> Não se aplica</label>
+            </div>
+          </div>
+        `;
+      });
+      html += `
+        <div class="form-group">
+          <label>Responsável pela inspeção *</label>
+          <input type="text" id="responsavel_inspecao" placeholder="Nome completo" required>
+        </div>
+        <div class="form-group">
+          <label>Observações adicionais</label>
+          <textarea id="observacoes_checklist" placeholder="Registre observações gerais, não conformidades relevantes, etc."></textarea>
+        </div>
+      `;
+      formFieldsContainer.innerHTML = html;
+      formModal.style.display = 'flex';
+    }
+
+    closeFormModalBtn.addEventListener('click', () => {
+      formModal.style.display = 'none';
+    });
+    cancelFormBtn.addEventListener('click', () => {
+      formModal.style.display = 'none';
+    });
+
+    generatePdfBtn.addEventListener('click', async () => {
+      const answers = [];
+      for (let i = 0; i < questions.length; i++) {
+        const selected = document.querySelector(`input[name="q${i}"]:checked`);
+        answers.push(selected ? selected.value : "Não respondido");
+      }
+      const responsavel = document.getElementById('responsavel_inspecao')?.value.trim();
+      if (!responsavel) {
+        alert("Preencha o campo 'Responsável pela inspeção'.");
+        return;
+      }
+      const observacoes = document.getElementById('observacoes_checklist')?.value || '';
+      
+      const fullAnswers = {
+        ...answers,
+        responsavel: responsavel,
+        observacoes: observacoes
+      };
+      
+      try {
+        await generateAndAttachPdf(currentFormItemId, currentFormCategory, currentFormMonthName, fullAnswers);
+        formModal.style.display = 'none';
+      } catch (err) {
+        alert("Erro: " + err.message);
+      }
     });
 
     // ==================== MODAL DE CRIAÇÃO ====================
@@ -582,6 +725,53 @@
         }
       }
     });
+
+    // ==================== DOWNLOAD POR MÊS ====================
+    async function downloadMonthPDFs(category, monthName) {
+      try {
+        if (!window.PDFLib) {
+          alert("Biblioteca PDF-lib não carregada. Recarregue a página.");
+          return;
+        }
+        const { PDFDocument } = window.PDFLib;
+        const items = await getAllItemsWithFiles();
+        const filesToMerge = [];
+        for (const item of items) {
+          const file = item.files.find(f => f.category === category);
+          if (file && file.file_url) {
+            const response = await fetch(file.file_url);
+            if (!response.ok) continue;
+            const blob = await response.blob();
+            filesToMerge.push({ name: `${item.name} - ${item.code}.pdf`, blob });
+          }
+        }
+        if (filesToMerge.length === 0) {
+          alert(`Nenhum PDF encontrado para ${monthName}.`);
+          return;
+        }
+
+        const mergedPdf = await PDFDocument.create();
+        for (const file of filesToMerge) {
+          const arrayBuffer = await file.blob.arrayBuffer();
+          const pdf = await PDFDocument.load(arrayBuffer);
+          const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+          copiedPages.forEach(page => mergedPdf.addPage(page));
+        }
+        const mergedPdfBytes = await mergedPdf.save();
+        const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `todos_${monthName}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error(err);
+        alert(`Erro ao mesclar PDFs de ${monthName}: ${err.message}`);
+      }
+    }
 
     // ==================== INICIALIZAÇÃO ====================
     document.getElementById('addItemBtn').addEventListener('click', openCreateModal);
