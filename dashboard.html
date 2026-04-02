@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TENDEX | Inspeção de Tendas</title>
   <style>
+    /* (todo o CSS permanece igual ao da versão anterior - omitido por brevidade, mas você deve manter o mesmo) */
     * { margin:0; padding:0; box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f3f6fc; padding: 2rem 1.5rem; }
     .dashboard-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; padding-bottom: 0.75rem; border-bottom: 2px solid #cbd5e1; }
@@ -338,7 +339,7 @@
       return itemIdFinal;
     }
 
-    // ==================== GERAR PDF USANDO O MODELO (PREENCHE CAMPOS) ====================
+    // ==================== GERAR PDF USANDO O MODELO (COM CAMPOS) ====================
     const MODELO_PDF_URL = "https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/pdfs/modelo_checklist.pdf";
 
     async function generateAndAttachPdf(itemId, category, monthName, formData) {
@@ -351,7 +352,7 @@
         const pdfDoc = await PDFDocument.load(modelBytes);
         const form = pdfDoc.getForm();
 
-        // 2. Preencher campos de texto do cabeçalho
+        // 2. Preencher campos de texto do cabeçalho (use os nomes EXATOS que você deu no PDFescape)
         const camposTexto = {
           localidade: formData.localidade || "",
           latitude: formData.latitude || "0,00000000000",
@@ -371,7 +372,9 @@
           try {
             const field = form.getTextField(nome);
             field.setText(valor);
-          } catch (e) { /* campo não existe no modelo, ignorar */ }
+          } catch (e) {
+            console.warn(`Campo "${nome}" não encontrado no PDF.`);
+          }
         }
 
         // 3. Preencher respostas das perguntas (campos resp1 a resp25)
@@ -380,7 +383,9 @@
           try {
             const field = form.getTextField(`resp${i+1}`);
             field.setText(resposta);
-          } catch (e) { /* campo não existe */ }
+          } catch (e) {
+            console.warn(`Campo "resp${i+1}" não encontrado.`);
+          }
         }
 
         // 4. Salvar o PDF preenchido
