@@ -54,18 +54,22 @@
     .form-group { margin-bottom: 1rem; }
     .form-group label { display: block; font-weight: 600; margin-bottom: 0.3rem; font-size: 0.85rem; }
     .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 1rem; font-family: inherit; }
-    .form-group textarea { min-height: 80px; resize: vertical; }
-    .question-item { margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #e2e8f0; }
-    .question-text { font-weight: 600; font-size: 0.85rem; margin-bottom: 0.3rem; }
-    .radio-group { display: flex; gap: 1rem; margin-top: 0.3rem; }
-    .radio-group label { font-weight: normal; display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; }
-    .month-group { margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-    .month-group label { font-weight: 600; width: 110px; font-size: 0.8rem; }
-    .month-group input[type="file"] { flex: 1; }
-    .attachments-title { font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 0.8rem; border-left: 3px solid #3b82f6; padding-left: 0.6rem; margin-top: 1rem; }
+    .form-group textarea { min-height: 60px; resize: vertical; }
+    .form-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .form-row .form-group { flex: 1; }
+    .question-group { margin-bottom: 1.5rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 1rem; }
+    .question-text { font-weight: 600; margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .question-options { display: flex; gap: 1rem; margin-bottom: 0.5rem; }
+    .question-options label { font-weight: normal; margin-right: 0.5rem; }
+    .question-obs { margin-top: 0.5rem; }
+    .question-obs input { font-size: 0.8rem; padding: 0.4rem; }
     .modal-buttons { display: flex; justify-content: flex-end; gap: 0.8rem; margin-top: 1.2rem; }
     .btn-save { background: #1e4a76; color: white; padding: 0.5rem 1.2rem; border-radius: 2rem; border: none; cursor: pointer; }
     .btn-cancel { background: #e2e8f0; color: #1e293b; padding: 0.5rem 1.2rem; border-radius: 2rem; border: none; cursor: pointer; }
+    .attachments-title { font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 0.8rem; border-left: 3px solid #3b82f6; padding-left: 0.6rem; margin-top: 1rem; }
+    .month-group { margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .month-group label { font-weight: 600; width: 110px; font-size: 0.8rem; }
+    .month-group input[type="file"] { flex: 1; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
@@ -139,11 +143,11 @@
   </div>
 </div>
 
-<!-- Modal do formulário de checklist -->
+<!-- Modal do formulário completo para preencher e gerar PDF -->
 <div id="formModal" class="modal">
   <div class="modal-content">
     <div class="modal-header">
-      <h2 id="formModalTitle">Checklist de Inspeção</h2>
+      <h2 id="formModalTitle">Formulário de Inspeção</h2>
       <button class="close-modal" id="closeFormModalBtn">&times;</button>
     </div>
     <div id="formFieldsContainer"></div>
@@ -164,35 +168,36 @@
     const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
     const monthKeys = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
-    // Lista de perguntas do checklist (baseada no PDF fornecido)
-    const questions = [
-      "As tendas/Galpões lonados possuem Projeto Estrutural e ART por engenheiro habilitado?",
-      "Possuem Projeto de SPDA e ART vigente? (tendas >25m²)",
-      "Possuem aterramento conforme projeto do canteiro?",
-      "Manual de instrução/montagem disponível na frente de serviço?",
-      "Possuem placa de liberação com data e responsável?",
-      "Possuem plano de inspeção aderente ao projeto? (tendas >25m²)",
-      "Formulário de inspeção anterior disponível? (tendas >25m²)",
-      "Estrutura de sustentação (aranha) em bom estado, parafusada, sem corrosão/deformação?",
-      "Cintas Poliéster tensionadas, sem deformação/cortes?",
-      "Colunas alinhadas perpendicularmente, sem corrosão/deformação?",
-      "Colunas encaixadas e parafusadas às vigas, com mão francesa?",
-      "Mãos francesas com parafusos autotravantes?",
-      "Distância segura de escavações/taludes (conforme projeto)?",
-      "Travas/parafusos sem sinais de corrosão ou folgas?",
-      "Vigas alinhadas perpendicularmente aos pilares, sem corrosão/deformação?",
-      "Cabos de aço tensionados, com clips e sapatilhas?",
-      "Estaiamento com cinta/cabo e catraca vinculada a chumbador? Ângulo mínimo 60°?",
-      "Pilares com pelo menos 02 chumbadores com ponto de solda?",
-      "Lona/sombrite lateral em bom estado, esticada e amarrada?",
-      "Lona/sombrite do teto em bom estado, esticada e amarrada?",
-      "Calhas e pilares vazados desobstruídos (se aplicável)?",
-      "Distância segura de rede elétrica/equipamentos/árvores?",
-      "Sinalização de saída de emergência e alarme (se aplicável)?",
-      "Sistema de iluminação instalado corretamente (se aplicável)?",
-      "Lona de cobertura sem deformação por acúmulo de água/folhas?"
+    // Lista completa de perguntas (25 itens)
+    const checklistPerguntas = [
+      "[IMPEDITIVO] [Projeto] As tendas/ Galpões lonados possuem Projeto Estrutural e Anotação de Responsabilidade Técnica executado por um Engenheiro habilitado pelo CREA e está aderente? (caso as tendas/galpões lonados não possua projeto, considerar impeditivo)",
+      "[Projeto] As tendas/ Galpões lonados utilizados como abrigo seguro possuem Projeto de SPDA e Anotação de Responsabilidade Técnica executado por um Engenheiro habilitado pelo CREA e está vigente? (ver NBR-ABNT 5419). (referência, tendas >25 m²)",
+      "[Projeto] As tendas/ Galpões lonados utilizados para cobrir estruturas de canteiro, possuem aterramento conforme projeto do canteiro de obras?",
+      "[Projeto] O manual de instrução/ montagem do fabricante estão disponíveis na frente de serviço?",
+      "[Projeto] As tendas/ Galpões lonados, possuem a placa de liberação com data e responsável?",
+      "[Projeto] As tendas/ Galpões lonados possuem plano de inspeção e o mesmo está aderente, conforme projeto? (referência, tendas >25 m²)",
+      "[Projeto] O formulário de inspeção anterior está disponível na frente de serviço? (referência, tendas >25 m²)",
+      "[Inspeção] A aranha (estrutura de sustentação da lona), estão em bom estado de conservação, parafusadas com parafuso autotravante, tanto na parte superior e inferior do teto? conforme inspeção visual? não apresentando corrosão e/ou deformação?",
+      "[Inspeção] As Cintas Poliéster estão tensionada e não apresentam deformação, fissuras ou cortes, conforme projeto?",
+      "[Inspeção] As colunas de escoramento e colunas de sustentação (pilares) estão alinhadas perpendicular (90°) as vigas e não apresentam corrosão e/ou deformação?",
+      "[Inspeção] As colunas de sustentação estão encaixadas e parafusadas às vigas e possuem mão francesa?",
+      "[Inspeção] As mãos francesas possuem parafusos autotravantes de encaixe nas vigas e pilares?",
+      "[Inspeção] As tendas/ Galpões lonados não estão montadas próximo à escavação, taludes ou pilhas de materiais onde exista risco de ser atingido em caso de deslizamento ou ruptura? (distância a ser definida conforme projeto).",
+      "[Inspeção] As travas (parafusos cabeça sextavado, porcas sextavada, pino em L, arruela lisa, chumbadores, porca e contraporca, ou porca autotravante) apresentam sinais de corrosão ou folgas?",
+      "[Inspeção] As vigas (calha treliçada), estão alinhadas perpendicular (90°) aos pilares e não apresentam corrosão e/ou deformação?",
+      "[Inspeção] Os cabos de aço estão tensionados e possuem clips, não possuem fissuras ou corrosão, e possuem sapatilhas para fixação, conforme projeto?",
+      "[Inspeção] Todas as colunas de sustentação (pilares) possuem estaiamento com Cinta Poliéster e/ou cabo de aço conforme projeto e catraca vinculada a um Chumbador - Finca / Parabole? Ângulo mínimo de 60° entre o estaiamento e o pilar.",
+      "[Inspeção] Todas as colunas de sustentação (pilares) possuem no mínimo 02 Chumbadores - Finca com ponto de solda na base / Parabole por pilar?",
+      "[Inspeção] A lona / Sombrite do fechamento lateral, esta em bom estado de conservação, não apresenta rasgos, furos, esta amarrada e esticada em todos os pontos de fixação conforme projeto?",
+      "[Inspeção] A lona / Sombrite do teto, esta em bom estado de conservação, não apresenta rasgos, furos, esta esticada e amarrada às vigas em todos os pontos de fixação, conforme projeto?",
+      "[Inspeção] As calhas de água de chuva e o interior dos pilares vazados estão totalmente desobstruídos? (quando aplicável no projeto).",
+      "[Inspeção] As tendas/ Galpões lonados estão montadas a uma distância segura de rede elétrica, equipamento ou árvores que ofereça risco de queda de peças e materiais?",
+      "[Inspeção] As tendas/galpões lonados utilizadas para ocupação de pessoas possuem sinalização de saída de emergência e alarme de emergência, conforme projeto? (adotar o item conforme indicação do projeto)",
+      "[Inspeção] O sistema de iluminação (se aplicável), estão instalados corretamente?",
+      "[Inspeção] A lona de cobertura está sem nenhuma deformação ocasionada por acumulo de água, folhas, minério, etc.?"
     ];
 
+    // Variáveis de controle do formulário
     let currentFormItemId = null;
     let currentFormCategory = null;
     let currentFormMonthName = null;
@@ -334,53 +339,122 @@
       return itemIdFinal;
     }
 
-    // ==================== GERAR PDF COM CHECKLIST ====================
-    async function generateAndAttachPdf(itemId, category, monthName, answers) {
+    // ==================== GERAR PDF COM LAYOUT PADRÃO ====================
+    async function generateAndAttachPdf(itemId, category, monthName, formData) {
       try {
         if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
-        const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
+        const { PDFDocument, StandardFonts, rgb, degrees } = window.PDFLib;
         const pdfDoc = await PDFDocument.create();
-        let page = pdfDoc.addPage([600, 800]);
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        
-        let y = 750;
-        const margin = 40;
+
+        // Adicionar página A4 (595x842)
+        const page = pdfDoc.addPage([595, 842]);
+        const { width, height } = page;
+        let y = height - 50;
+        const margin = 50;
         const lineHeight = 16;
-        let currentPage = page;
-        
-        const addText = (text, size, fontType = font, colorRgb = rgb(0,0,0), xOffset = margin) => {
+        const columnX = { num: margin, pergunta: margin + 35, resposta: margin + 420, observacao: margin + 480 };
+        const colWidth = { pergunta: 380, resposta: 55, observacao: 60 };
+
+        // Função auxiliar para escrever texto e controlar quebra de página
+        function drawTextLine(text, x, y, size, fontType = font, color = rgb(0,0,0)) {
           if (y < 50) {
-            currentPage = pdfDoc.addPage([600, 800]);
-            y = 750;
+            const newPage = pdfDoc.addPage([595, 842]);
+            y = height - 50;
           }
-          currentPage.drawText(text, { x: xOffset, y: y, size: size, font: fontType, color: colorRgb });
-          y -= (size + 4);
-        };
-
-        addText(`Checklist de Inspeção - ${monthName}`, 16, boldFont, rgb(0,0,0));
-        addText(`Item: ${currentFormItemId ? 'ID: ' + currentFormItemId : ''}`, 10);
-        addText(`Data: ${new Date().toLocaleDateString()}`, 10);
-        y -= 10;
-
-        for (let i = 0; i < questions.length; i++) {
-          const q = questions[i];
-          const answer = answers[i] || 'Não respondido';
-          addText(`${i+1}. ${q}`, 9, boldFont, rgb(0,0,0));
-          addText(`   Resposta: ${answer}`, 9, font, rgb(0.2,0.2,0.2), margin + 10);
-          y -= 4;
+          page.drawText(text, { x, y, size, font: fontType, color });
+          return y - lineHeight;
         }
 
-        addText(`\nResponsável pela inspeção: ${answers.responsavel || 'Não informado'}`, 10, boldFont);
-        addText(`Observações adicionais: ${answers.observacoes || 'Nenhuma'}`, 9);
-        addText(`Gerado automaticamente em: ${new Date().toLocaleString()}`, 8, font, rgb(0.5,0.5,0.5));
-        
+        // ========= CABEÇALHO =========
+        page.drawText("Formulário Padrão", { x: margin, y: y, size: 14, font: boldFont, color: rgb(0,0,0) });
+        y -= 20;
+        page.drawText("VALE", { x: margin, y: y, size: 12, font: boldFont, color: rgb(0,0.4,0.6) });
+        y -= 20;
+        page.drawText("Inspeção de SSMA em Tendas e Galpões Lonados", { x: margin, y: y, size: 12, font: boldFont });
+        y -= 25;
+
+        // Campos de identificação
+        const campos = [
+          `Nome da Localidade: ${formData.localidade || ''}`,
+          `Latitude (GD): ${formData.latitude || '0,00000000000'}`,
+          `Longitude (GD): ${formData.longitude || '0,00000000000'}`,
+          `Responsável pelo Preenchimento - Nome: ${formData.resp_nome || ''}`,
+          `Responsável pelo Preenchimento - Matrícula: ${formData.resp_matricula || ''}`,
+          `Data da Inspeção: ${formData.data_inspecao || ''}`,
+          `Empresa: ${formData.empresa || ''}`,
+          `Inspetor/Auditor: ${formData.inspetor_nome || ''}`,
+          `Matrícula: ${formData.inspetor_matricula || ''}`,
+          `CPF: ${formData.inspetor_cpf || ''}`,
+          `SAP ID: ${formData.inspetor_sap || ''}`,
+          `Nome do Inspetor: ${formData.inspetor_nome2 || ''}`,
+          `Entrevistados: ${formData.entrevistados || ''}`
+        ];
+        for (const campo of campos) {
+          page.drawText(campo, { x: margin, y: y, size: 9, font: font });
+          y -= 14;
+          if (y < 60) {
+            const newPage = pdfDoc.addPage([595, 842]);
+            y = height - 50;
+          }
+        }
+        y -= 10;
+
+        // Tabela: cabeçalho
+        page.drawText("Nº", { x: columnX.num, y: y, size: 10, font: boldFont });
+        page.drawText("Pergunta", { x: columnX.pergunta, y: y, size: 10, font: boldFont });
+        page.drawText("Resposta", { x: columnX.resposta, y: y, size: 10, font: boldFont });
+        page.drawText("Observação", { x: columnX.observacao, y: y, size: 10, font: boldFont });
+        y -= 5;
+        page.drawLine({ start: { x: margin, y: y+2 }, end: { x: width - margin, y: y+2 }, thickness: 1, color: rgb(0,0,0) });
+        y -= 12;
+
+        // Percorrer perguntas
+        for (let i = 0; i < checklistPerguntas.length; i++) {
+          if (y < 60) {
+            const newPage = pdfDoc.addPage([595, 842]);
+            y = height - 50;
+            // redesenhar cabeçalho da tabela na nova página
+            page.drawText("Nº", { x: columnX.num, y: y, size: 10, font: boldFont });
+            page.drawText("Pergunta", { x: columnX.pergunta, y: y, size: 10, font: boldFont });
+            page.drawText("Resposta", { x: columnX.resposta, y: y, size: 10, font: boldFont });
+            page.drawText("Observação", { x: columnX.observacao, y: y, size: 10, font: boldFont });
+            y -= 5;
+            page.drawLine({ start: { x: margin, y: y+2 }, end: { x: width - margin, y: y+2 }, thickness: 1, color: rgb(0,0,0) });
+            y -= 12;
+          }
+          const pergunta = checklistPerguntas[i];
+          const resposta = formData[`resp_${i}`] || "Não respondido";
+          const obs = formData[`obs_${i}`] || "";
+          // Número
+          page.drawText(`${i+1}`, { x: columnX.num, y: y, size: 9, font: font });
+          // Pergunta (truncar se muito longa)
+          let perguntaStr = pergunta.length > 70 ? pergunta.substring(0, 67) + "..." : pergunta;
+          page.drawText(perguntaStr, { x: columnX.pergunta, y: y, size: 8, font: font });
+          // Resposta com cor
+          let respColor = rgb(0,0,0);
+          if (resposta === "Conforme") respColor = rgb(0,0.6,0);
+          else if (resposta === "Não conforme") respColor = rgb(0.8,0,0);
+          else if (resposta === "Não se aplica") respColor = rgb(0.5,0.5,0.5);
+          page.drawText(resposta, { x: columnX.resposta, y: y, size: 8, font: boldFont, color: respColor });
+          // Observação (truncada)
+          let obsStr = obs.length > 20 ? obs.substring(0, 17) + "..." : obs;
+          page.drawText(obsStr, { x: columnX.observacao, y: y, size: 8, font: font });
+          y -= lineHeight;
+        }
+
+        // Rodapé com número de página
+        const pages = pdfDoc.getPages();
+        pages.forEach((pg, idx) => {
+          pg.drawText(`Página ${idx+1} de ${pages.length}`, { x: margin, y: 30, size: 8, font: font, color: rgb(0.5,0.5,0.5) });
+        });
+
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const file = new File([blob], `checklist_${monthName}_${Date.now()}.pdf`, { type: 'application/pdf' });
-        
         await addFileToItem(itemId, category, file);
-        alert(`Checklist gerado e anexado ao mês ${monthName}!`);
+        alert(`PDF gerado e anexado ao mês ${monthName}!`);
         await refreshData();
         await openDetailModal(itemId);
       } catch (err) {
@@ -473,7 +547,7 @@
           ${monthNames.map((month, idx) => renderDetailPdfRow(monthKeys[idx], month, monthlyFiles[idx], item.id, true)).join('')}
         </div>
         <button class="delete-item-btn" id="deleteItemFromDetailBtn">🗑️ Excluir este item</button>
-        <div class="notice">* Clique nos botões + para anexar/substituir PDFs. Clique em 📝 para preencher o checklist e gerar PDF.</div>
+        <div class="notice">* Clique nos botões + para anexar/substituir PDFs. Clique em 📝 para preencher formulário e gerar PDF.</div>
       `;
       detailContent.innerHTML = html;
 
@@ -544,7 +618,7 @@
             <div class="pdf-actions">
               <button class="upload-pdf-btn" data-itemid="${itemId}" data-category="${category}" title="Substituir PDF">🔄</button>
               <button class="remove-pdf-btn" data-fileid="${file.id}" title="Remover">✖</button>
-              ${showFormButton ? `<button class="fill-form-btn" data-itemid="${itemId}" data-category="${category}" data-monthname="${label}" title="Preencher checklist">📝</button>` : ''}
+              ${showFormButton ? `<button class="fill-form-btn" data-itemid="${itemId}" data-category="${category}" data-monthname="${label}" title="Preencher formulário">📝</button>` : ''}
             </div>
           </div>
         `;
@@ -555,14 +629,14 @@
             <div class="pdf-file-info">— Nenhum PDF anexado —</div>
             <div class="pdf-actions">
               <button class="upload-pdf-btn" data-itemid="${itemId}" data-category="${category}" title="Adicionar PDF">➕</button>
-              ${showFormButton ? `<button class="fill-form-btn" data-itemid="${itemId}" data-category="${category}" data-monthname="${label}" title="Preencher checklist">📝</button>` : ''}
+              ${showFormButton ? `<button class="fill-form-btn" data-itemid="${itemId}" data-category="${category}" data-monthname="${label}" title="Preencher formulário">📝</button>` : ''}
             </div>
           </div>
         `;
       }
     }
 
-    // ==================== MODAL DO CHECKLIST ====================
+    // ==================== MODAL DO FORMULÁRIO ====================
     const formModal = document.getElementById('formModal');
     const formModalTitle = document.getElementById('formModalTitle');
     const formFieldsContainer = document.getElementById('formFieldsContainer');
@@ -574,63 +648,89 @@
       currentFormItemId = itemId;
       currentFormCategory = category;
       currentFormMonthName = monthName;
-      formModalTitle.innerText = `Checklist de Inspeção - ${monthName}`;
+      formModalTitle.innerText = `Formulário de Inspeção - ${monthName}`;
       
-      let html = `<div style="margin-bottom: 1rem;"><strong>Instruções:</strong> Marque a opção adequada para cada item.</div>`;
-      questions.forEach((q, idx) => {
+      let html = `
+        <div class="form-row">
+          <div class="form-group"><label>Nome da Localidade</label><input type="text" id="localidade"></div>
+          <div class="form-group"><label>Latitude (GD)</label><input type="text" id="latitude" value="0,00000000000"></div>
+          <div class="form-group"><label>Longitude (GD)</label><input type="text" id="longitude" value="0,00000000000"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Responsável - Nome</label><input type="text" id="resp_nome"></div>
+          <div class="form-group"><label>Responsável - Matrícula</label><input type="text" id="resp_matricula"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Data da Inspeção</label><input type="date" id="data_inspecao"></div>
+          <div class="form-group"><label>Empresa</label><input type="text" id="empresa"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Inspetor/Auditor</label><input type="text" id="inspetor_nome"></div>
+          <div class="form-group"><label>Matrícula</label><input type="text" id="inspetor_matricula"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>CPF</label><input type="text" id="inspetor_cpf"></div>
+          <div class="form-group"><label>SAP ID</label><input type="text" id="inspetor_sap"></div>
+          <div class="form-group"><label>Nome</label><input type="text" id="inspetor_nome2"></div>
+        </div>
+        <div class="form-group"><label>Entrevistados</label><textarea id="entrevistados" rows="2"></textarea></div>
+        <hr style="margin: 1rem 0;">
+        <h3>Checklist de Inspeção</h3>
+      `;
+      
+      for (let i = 0; i < checklistPerguntas.length; i++) {
         html += `
-          <div class="question-item">
-            <div class="question-text">${idx+1}. ${escapeHtml(q)}</div>
-            <div class="radio-group">
-              <label><input type="radio" name="q${idx}" value="Conforme"> Conforme</label>
-              <label><input type="radio" name="q${idx}" value="Não conforme"> Não conforme</label>
-              <label><input type="radio" name="q${idx}" value="Não se aplica"> Não se aplica</label>
+          <div class="question-group">
+            <div class="question-text">${i+1}. ${escapeHtml(checklistPerguntas[i])}</div>
+            <div class="question-options">
+              <label><input type="radio" name="resp_${i}" value="Conforme"> Conforme</label>
+              <label><input type="radio" name="resp_${i}" value="Não conforme"> Não conforme</label>
+              <label><input type="radio" name="resp_${i}" value="Não se aplica"> Não se aplica</label>
             </div>
+            <div class="question-obs"><input type="text" placeholder="Observação (opcional)" id="obs_${i}" style="width:100%;"></div>
           </div>
         `;
-      });
-      html += `
-        <div class="form-group">
-          <label>Responsável pela inspeção *</label>
-          <input type="text" id="responsavel_inspecao" placeholder="Nome completo" required>
-        </div>
-        <div class="form-group">
-          <label>Observações adicionais</label>
-          <textarea id="observacoes_checklist" placeholder="Registre observações gerais, não conformidades relevantes, etc."></textarea>
-        </div>
-      `;
+      }
       formFieldsContainer.innerHTML = html;
       formModal.style.display = 'flex';
     }
 
-    closeFormModalBtn.addEventListener('click', () => {
-      formModal.style.display = 'none';
-    });
-    cancelFormBtn.addEventListener('click', () => {
-      formModal.style.display = 'none';
-    });
+    closeFormModalBtn.addEventListener('click', () => { formModal.style.display = 'none'; });
+    cancelFormBtn.addEventListener('click', () => { formModal.style.display = 'none'; });
 
     generatePdfBtn.addEventListener('click', async () => {
-      const answers = [];
-      for (let i = 0; i < questions.length; i++) {
-        const selected = document.querySelector(`input[name="q${i}"]:checked`);
-        answers.push(selected ? selected.value : "Não respondido");
+      // Coletar dados do cabeçalho
+      const formData = {
+        localidade: document.getElementById('localidade')?.value || '',
+        latitude: document.getElementById('latitude')?.value || '0,00000000000',
+        longitude: document.getElementById('longitude')?.value || '0,00000000000',
+        resp_nome: document.getElementById('resp_nome')?.value || '',
+        resp_matricula: document.getElementById('resp_matricula')?.value || '',
+        data_inspecao: document.getElementById('data_inspecao')?.value || '',
+        empresa: document.getElementById('empresa')?.value || '',
+        inspetor_nome: document.getElementById('inspetor_nome')?.value || '',
+        inspetor_matricula: document.getElementById('inspetor_matricula')?.value || '',
+        inspetor_cpf: document.getElementById('inspetor_cpf')?.value || '',
+        inspetor_sap: document.getElementById('inspetor_sap')?.value || '',
+        inspetor_nome2: document.getElementById('inspetor_nome2')?.value || '',
+        entrevistados: document.getElementById('entrevistados')?.value || '',
+        itemName: currentItems.find(i => i.id === currentFormItemId)?.name || '',
+        itemCode: currentItems.find(i => i.id === currentFormItemId)?.code || ''
+      };
+      // Coletar respostas e observações
+      for (let i = 0; i < checklistPerguntas.length; i++) {
+        const radio = document.querySelector(`input[name="resp_${i}"]:checked`);
+        formData[`resp_${i}`] = radio ? radio.value : "Não respondido";
+        const obs = document.getElementById(`obs_${i}`)?.value || '';
+        formData[`obs_${i}`] = obs;
       }
-      const responsavel = document.getElementById('responsavel_inspecao')?.value.trim();
-      if (!responsavel) {
-        alert("Preencha o campo 'Responsável pela inspeção'.");
+      // Validar data e responsável mínimo
+      if (!formData.data_inspecao || !formData.resp_nome) {
+        alert("Preencha pelo menos a Data da Inspeção e o Responsável - Nome.");
         return;
       }
-      const observacoes = document.getElementById('observacoes_checklist')?.value || '';
-      
-      const fullAnswers = {
-        ...answers,
-        responsavel: responsavel,
-        observacoes: observacoes
-      };
-      
       try {
-        await generateAndAttachPdf(currentFormItemId, currentFormCategory, currentFormMonthName, fullAnswers);
+        await generateAndAttachPdf(currentFormItemId, currentFormCategory, currentFormMonthName, formData);
         formModal.style.display = 'none';
       } catch (err) {
         alert("Erro: " + err.message);
