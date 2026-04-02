@@ -197,7 +197,6 @@
       "[Inspeção] A lona de cobertura está sem nenhuma deformação ocasionada por acumulo de água, folhas, minério, etc.?"
     ];
 
-    // Variáveis de controle do formulário
     let currentFormItemId = null;
     let currentFormCategory = null;
     let currentFormMonthName = null;
@@ -339,43 +338,45 @@
       return itemIdFinal;
     }
 
-    // ==================== GERAR PDF COM LAYOUT PADRÃO ====================
+    // ==================== GERAR PDF COM LAYOUT PADRÃO (VERSÃO CORRIGIDA) ====================
     async function generateAndAttachPdf(itemId, category, monthName, formData) {
       try {
         if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
-        const { PDFDocument, StandardFonts, rgb, degrees } = window.PDFLib;
+        const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
         const pdfDoc = await PDFDocument.create();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-        // Adicionar página A4 (595x842)
-        const page = pdfDoc.addPage([595, 842]);
+        let page = pdfDoc.addPage([595, 842]);
         const { width, height } = page;
         let y = height - 50;
         const margin = 50;
         const lineHeight = 16;
-        const columnX = { num: margin, pergunta: margin + 35, resposta: margin + 420, observacao: margin + 480 };
-        const colWidth = { pergunta: 380, resposta: 55, observacao: 60 };
+        const colX = { num: margin, pergunta: margin + 35, resposta: margin + 420, observacao: margin + 480 };
 
-        // Função auxiliar para escrever texto e controlar quebra de página
-        function drawTextLine(text, x, y, size, fontType = font, color = rgb(0,0,0)) {
+        function ensureValidY() {
+          if (isNaN(y)) y = height - 50;
           if (y < 50) {
-            const newPage = pdfDoc.addPage([595, 842]);
+            page = pdfDoc.addPage([595, 842]);
             y = height - 50;
+            page.drawText("Nº", { x: colX.num, y: y, size: 10, font: boldFont });
+            page.drawText("Pergunta", { x: colX.pergunta, y: y, size: 10, font: boldFont });
+            page.drawText("Resposta", { x: colX.resposta, y: y, size: 10, font: boldFont });
+            page.drawText("Observação", { x: colX.observacao, y: y, size: 10, font: boldFont });
+            y -= 5;
+            page.drawLine({ start: { x: margin, y: y+2 }, end: { x: width - margin, y: y+2 }, thickness: 1, color: rgb(0,0,0) });
+            y -= 12;
           }
-          page.drawText(text, { x, y, size, font: fontType, color });
-          return y - lineHeight;
         }
 
         // ========= CABEÇALHO =========
-        page.drawText("Formulário Padrão", { x: margin, y: y, size: 14, font: boldFont, color: rgb(0,0,0) });
+        page.drawText("Formulário Padrão", { x: margin, y: y, size: 14, font: boldFont });
         y -= 20;
         page.drawText("VALE", { x: margin, y: y, size: 12, font: boldFont, color: rgb(0,0.4,0.6) });
         y -= 20;
         page.drawText("Inspeção de SSMA em Tendas e Galpões Lonados", { x: margin, y: y, size: 12, font: boldFont });
         y -= 25;
 
-        // Campos de identificação
         const campos = [
           `Nome da Localidade: ${formData.localidade || ''}`,
           `Latitude (GD): ${formData.latitude || '0,00000000000'}`,
@@ -392,59 +393,40 @@
           `Entrevistados: ${formData.entrevistados || ''}`
         ];
         for (const campo of campos) {
+          ensureValidY();
           page.drawText(campo, { x: margin, y: y, size: 9, font: font });
           y -= 14;
-          if (y < 60) {
-            const newPage = pdfDoc.addPage([595, 842]);
-            y = height - 50;
-          }
         }
         y -= 10;
+        ensureValidY();
 
-        // Tabela: cabeçalho
-        page.drawText("Nº", { x: columnX.num, y: y, size: 10, font: boldFont });
-        page.drawText("Pergunta", { x: columnX.pergunta, y: y, size: 10, font: boldFont });
-        page.drawText("Resposta", { x: columnX.resposta, y: y, size: 10, font: boldFont });
-        page.drawText("Observação", { x: columnX.observacao, y: y, size: 10, font: boldFont });
+        // Cabeçalho da tabela
+        page.drawText("Nº", { x: colX.num, y: y, size: 10, font: boldFont });
+        page.drawText("Pergunta", { x: colX.pergunta, y: y, size: 10, font: boldFont });
+        page.drawText("Resposta", { x: colX.resposta, y: y, size: 10, font: boldFont });
+        page.drawText("Observação", { x: colX.observacao, y: y, size: 10, font: boldFont });
         y -= 5;
         page.drawLine({ start: { x: margin, y: y+2 }, end: { x: width - margin, y: y+2 }, thickness: 1, color: rgb(0,0,0) });
         y -= 12;
 
-        // Percorrer perguntas
         for (let i = 0; i < checklistPerguntas.length; i++) {
-          if (y < 60) {
-            const newPage = pdfDoc.addPage([595, 842]);
-            y = height - 50;
-            // redesenhar cabeçalho da tabela na nova página
-            page.drawText("Nº", { x: columnX.num, y: y, size: 10, font: boldFont });
-            page.drawText("Pergunta", { x: columnX.pergunta, y: y, size: 10, font: boldFont });
-            page.drawText("Resposta", { x: columnX.resposta, y: y, size: 10, font: boldFont });
-            page.drawText("Observação", { x: columnX.observacao, y: y, size: 10, font: boldFont });
-            y -= 5;
-            page.drawLine({ start: { x: margin, y: y+2 }, end: { x: width - margin, y: y+2 }, thickness: 1, color: rgb(0,0,0) });
-            y -= 12;
-          }
+          ensureValidY();
           const pergunta = checklistPerguntas[i];
           const resposta = formData[`resp_${i}`] || "Não respondido";
           const obs = formData[`obs_${i}`] || "";
-          // Número
-          page.drawText(`${i+1}`, { x: columnX.num, y: y, size: 9, font: font });
-          // Pergunta (truncar se muito longa)
+          page.drawText(`${i+1}`, { x: colX.num, y: y, size: 9, font: font });
           let perguntaStr = pergunta.length > 70 ? pergunta.substring(0, 67) + "..." : pergunta;
-          page.drawText(perguntaStr, { x: columnX.pergunta, y: y, size: 8, font: font });
-          // Resposta com cor
+          page.drawText(perguntaStr, { x: colX.pergunta, y: y, size: 8, font: font });
           let respColor = rgb(0,0,0);
           if (resposta === "Conforme") respColor = rgb(0,0.6,0);
           else if (resposta === "Não conforme") respColor = rgb(0.8,0,0);
           else if (resposta === "Não se aplica") respColor = rgb(0.5,0.5,0.5);
-          page.drawText(resposta, { x: columnX.resposta, y: y, size: 8, font: boldFont, color: respColor });
-          // Observação (truncada)
+          page.drawText(resposta, { x: colX.resposta, y: y, size: 8, font: boldFont, color: respColor });
           let obsStr = obs.length > 20 ? obs.substring(0, 17) + "..." : obs;
-          page.drawText(obsStr, { x: columnX.observacao, y: y, size: 8, font: font });
+          page.drawText(obsStr, { x: colX.observacao, y: y, size: 8, font: font });
           y -= lineHeight;
         }
 
-        // Rodapé com número de página
         const pages = pdfDoc.getPages();
         pages.forEach((pg, idx) => {
           pg.drawText(`Página ${idx+1} de ${pages.length}`, { x: margin, y: 30, size: 8, font: font, color: rgb(0.5,0.5,0.5) });
@@ -699,7 +681,6 @@
     cancelFormBtn.addEventListener('click', () => { formModal.style.display = 'none'; });
 
     generatePdfBtn.addEventListener('click', async () => {
-      // Coletar dados do cabeçalho
       const formData = {
         localidade: document.getElementById('localidade')?.value || '',
         latitude: document.getElementById('latitude')?.value || '0,00000000000',
@@ -717,14 +698,12 @@
         itemName: currentItems.find(i => i.id === currentFormItemId)?.name || '',
         itemCode: currentItems.find(i => i.id === currentFormItemId)?.code || ''
       };
-      // Coletar respostas e observações
       for (let i = 0; i < checklistPerguntas.length; i++) {
         const radio = document.querySelector(`input[name="resp_${i}"]:checked`);
         formData[`resp_${i}`] = radio ? radio.value : "Não respondido";
         const obs = document.getElementById(`obs_${i}`)?.value || '';
         formData[`obs_${i}`] = obs;
       }
-      // Validar data e responsável mínimo
       if (!formData.data_inspecao || !formData.resp_nome) {
         alert("Preencha pelo menos a Data da Inspeção e o Responsável - Nome.");
         return;
