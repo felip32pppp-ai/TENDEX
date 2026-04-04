@@ -150,7 +150,8 @@
     
     const userInfoDisplay = document.getElementById('userInfoDisplay');
     if (currentUser && currentUser.username) {
-      userInfoDisplay.innerHTML = `👤 ${currentUser.username} (${currentUser.email}) ✍️`;
+      // Mostrar apenas o nome do usuário (sem o email)
+      userInfoDisplay.innerHTML = `👤 ${currentUser.username} ✍️`;
     } else {
       userInfoDisplay.innerHTML = `👤 Não logado`;
       window.location.href = 'index.html';
