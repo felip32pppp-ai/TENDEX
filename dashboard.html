@@ -37,7 +37,6 @@
     .modal-header h2 { font-size: 1.3rem; }
     .close-modal { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b; padding: 0 0.5rem; }
     .close-modal:hover { color: #ef4444; }
-    /* Modal de logout */
     .logout-modal-content { max-width: 400px; text-align: center; }
     .logout-modal-content p { margin: 1rem 0; font-size: 1.1rem; }
     .logout-buttons { display: flex; gap: 1rem; justify-content: center; margin-top: 1rem; }
@@ -195,38 +194,13 @@
     const cancelLogoutBtn = document.getElementById('cancelLogoutBtn');
     const confirmLogoutBtn = document.getElementById('confirmLogoutBtn');
 
-    // Abrir modal ao clicar no usuário
-    userInfoDisplay.addEventListener('click', () => {
-      logoutModal.style.display = 'flex';
-    });
-
-    // Fechar modal
-    function closeLogoutModal() {
-      logoutModal.style.display = 'none';
-    }
-
+    userInfoDisplay.addEventListener('click', () => { logoutModal.style.display = 'flex'; });
+    function closeLogoutModal() { logoutModal.style.display = 'none'; }
     closeLogoutModalBtn.addEventListener('click', closeLogoutModal);
     cancelLogoutBtn.addEventListener('click', closeLogoutModal);
-
-    // Confirmar logout
-    confirmLogoutBtn.addEventListener('click', () => {
-      localStorage.removeItem('tendex_current_user');
-      window.location.href = 'index.html';
-    });
-
-    // Fechar ao clicar fora do modal
-    logoutModal.addEventListener('click', (e) => {
-      if (e.target === logoutModal) {
-        closeLogoutModal();
-      }
-    });
-
-    // Fechar com tecla ESC
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && logoutModal.style.display === 'flex') {
-        closeLogoutModal();
-      }
-    });
+    confirmLogoutBtn.addEventListener('click', () => { localStorage.removeItem('tendex_current_user'); window.location.href = 'index.html'; });
+    logoutModal.addEventListener('click', (e) => { if (e.target === logoutModal) closeLogoutModal(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && logoutModal.style.display === 'flex') closeLogoutModal(); });
 
     const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
     const monthKeys = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -320,7 +294,7 @@
       return itemIdFinal;
     }
 
-    // ==================== FUNÇÃO PARA ADICIONAR INFORMAÇÕES E ASSINATURA NA PRIMEIRA PÁGINA ====================
+    // ==================== FUNÇÃO CORRIGIDA: ASSINATURA COM PROPORÇÃO ORIGINAL ====================
     async function adicionarInfoItemEAssinatura(pdfDoc, itemCode, itemTamanho) {
       try {
         const pages = pdfDoc.getPages();
@@ -355,14 +329,25 @@
               let imagem;
               try { imagem = await pdfDoc.embedPng(imageBytes); } catch(e) { try { imagem = await pdfDoc.embedJpg(imageBytes); } catch(e2) {} }
               if (imagem) {
-                const imgWidth = 120, imgHeight = 50, imgX = width - imgWidth - 30, imgY = posY - imgHeight - 10;
-                pagina.drawImage(imagem, { x: imgX, y: imgY, width: imgWidth, height: imgHeight });
+                // Área disponível para a assinatura (largura máxima, altura máxima)
+                const areaMaxWidth = 180;
+                const areaMaxHeight = 80;
+                const originalWidth = imagem.width;
+                const originalHeight = imagem.height;
+                // Calcula a escala para caber dentro da área máxima, mantendo a proporção
+                const scale = Math.min(areaMaxWidth / originalWidth, areaMaxHeight / originalHeight);
+                const finalWidth = originalWidth * scale;
+                const finalHeight = originalHeight * scale;
+                // Posiciona a assinatura abaixo do texto, centralizada horizontalmente na área disponível
+                const imgX = width - finalWidth - 30;
+                const imgY = posY - finalHeight - 10;
+                pagina.drawImage(imagem, { x: imgX, y: imgY, width: finalWidth, height: finalHeight });
               }
             }
-          } catch (err) {}
+          } catch (err) { console.warn("Erro ao carregar assinatura:", err); }
         }
         return pdfDoc;
-      } catch (err) { return pdfDoc; }
+      } catch (err) { console.warn("Erro ao adicionar informações/assinatura:", err); return pdfDoc; }
     }
 
     // ==================== GERAR PDF USANDO O MODELO ====================
