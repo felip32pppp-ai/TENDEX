@@ -78,6 +78,44 @@
     .modal-buttons { display: flex; justify-content: flex-end; gap: 0.8rem; margin-top: 1.2rem; }
     .btn-save { background: #1e4a76; color: white; padding: 0.5rem 1.2rem; border-radius: 2rem; border: none; cursor: pointer; }
     .btn-cancel { background: #e2e8f0; color: #1e293b; padding: 0.5rem 1.2rem; border-radius: 2rem; border: none; cursor: pointer; }
+
+    /* ===== SPINNER / OVERLAY DE CARREGAMENTO ===== */
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 1.5rem;
+      z-index: 10;
+      backdrop-filter: blur(2px);
+    }
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 5px solid #e2e8f0;
+      border-top-color: #1e4a76;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .loading-text {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      color: #1e4a76;
+      font-weight: 600;
+    }
+    /* Ajuste para o modal de formulário relativo */
+    #formModal .modal-content {
+      position: relative;
+    }
     .attachments-title { font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 0.8rem; border-left: 3px solid #3b82f6; padding-left: 0.6rem; margin-top: 1rem; }
     .month-group { margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
     .month-group label { font-weight: 600; width: 110px; font-size: 0.8rem; }
@@ -329,16 +367,13 @@
               let imagem;
               try { imagem = await pdfDoc.embedPng(imageBytes); } catch(e) { try { imagem = await pdfDoc.embedJpg(imageBytes); } catch(e2) {} }
               if (imagem) {
-                // Área disponível para a assinatura (largura máxima, altura máxima)
-                const areaMaxWidth = 190;
-                const areaMaxHeight = 90;
+                const areaMaxWidth = 180;
+                const areaMaxHeight = 80;
                 const originalWidth = imagem.width;
                 const originalHeight = imagem.height;
-                // Calcula a escala para caber dentro da área máxima, mantendo a proporção
                 const scale = Math.min(areaMaxWidth / originalWidth, areaMaxHeight / originalHeight);
                 const finalWidth = originalWidth * scale;
                 const finalHeight = originalHeight * scale;
-                // Posiciona a assinatura abaixo do texto, centralizada horizontalmente na área disponível
                 const imgX = width - finalWidth - 30;
                 const imgY = posY - finalHeight - 10;
                 pagina.drawImage(imagem, { x: imgX, y: imgY, width: finalWidth, height: finalHeight });
@@ -445,7 +480,7 @@
       else return `<div class="pdf-row"><span class="pdf-label">${escapeHtml(label)}</span><div class="pdf-file-info">— Nenhum PDF anexado —</div><div class="pdf-actions"><button class="upload-pdf-btn" data-itemid="${itemId}" data-category="${category}" title="Adicionar PDF">➕</button>${showFormButton ? `<button class="fill-form-btn" data-itemid="${itemId}" data-category="${category}" data-monthname="${label}" title="Preencher formulário">📝</button>` : ''}</div></div>`;
     }
 
-    // ==================== FORMULÁRIO ====================
+    // ==================== FORMULÁRIO COM LOADING ====================
     const formModal = document.getElementById('formModal');
     const formFieldsContainer = document.getElementById('formFieldsContainer');
     const closeFormModalBtn = document.getElementById('closeFormModalBtn');
@@ -466,9 +501,31 @@
       formModal.style.display = 'flex';
     }
 
-    closeFormModalBtn.addEventListener('click', () => formModal.style.display = 'none');
-    cancelFormBtn.addEventListener('click', () => formModal.style.display = 'none');
+    // Função para criar overlay de carregamento
+    function showLoadingOverlay(modalContent) {
+      // Remove overlay existente se houver
+      const existing = modalContent.querySelector('.loading-overlay');
+      if (existing) existing.remove();
+      const overlay = document.createElement('div');
+      overlay.className = 'loading-overlay';
+      overlay.innerHTML = `<div class="spinner"></div><div class="loading-text">Gerando PDF, aguarde...</div>`;
+      modalContent.style.position = 'relative';
+      modalContent.appendChild(overlay);
+      // Desabilita todos os inputs, selects, textareas e botões do modal
+      const allInputs = modalContent.querySelectorAll('input, select, textarea, button');
+      allInputs.forEach(el => el.disabled = true);
+    }
+
+    function hideLoadingOverlay(modalContent) {
+      const overlay = modalContent.querySelector('.loading-overlay');
+      if (overlay) overlay.remove();
+      const allInputs = modalContent.querySelectorAll('input, select, textarea, button');
+      allInputs.forEach(el => el.disabled = false);
+      modalContent.style.position = '';
+    }
+
     generatePdfBtn.addEventListener('click', async () => {
+      const modalContent = document.querySelector('#formModal .modal-content');
       const formData = {
         unidade: document.getElementById('unidade')?.value || '',
         localidade: document.getElementById('localidade')?.value || '',
@@ -482,11 +539,22 @@
         formData[`resp_${i}`] = radio ? radio.value : "Não respondido";
       }
       if (!formData.data_inspecao || !formData.resp_nome) { alert("Preencha Data e Responsável."); return; }
+      
+      // Mostra overlay e desabilita tudo
+      showLoadingOverlay(modalContent);
+      
       try { 
         await generateAndAttachPdf(currentFormItemId, currentFormCategory, currentFormMonthName, formData, currentItemInfo); 
         formModal.style.display = 'none'; 
-      } catch (err) { alert("Erro: " + err.message); }
+      } catch (err) { 
+        alert("Erro: " + err.message); 
+      } finally {
+        hideLoadingOverlay(modalContent);
+      }
     });
+
+    closeFormModalBtn.addEventListener('click', () => formModal.style.display = 'none');
+    cancelFormBtn.addEventListener('click', () => formModal.style.display = 'none');
 
     // ==================== CRIAÇÃO DE ITEM ====================
     const createModal = document.getElementById('createItemModal');
