@@ -330,8 +330,8 @@
               try { imagem = await pdfDoc.embedPng(imageBytes); } catch(e) { try { imagem = await pdfDoc.embedJpg(imageBytes); } catch(e2) {} }
               if (imagem) {
                 // Área disponível para a assinatura (largura máxima, altura máxima)
-                const areaMaxWidth = 200;
-                const areaMaxHeight = 100;
+                const areaMaxWidth = 190;
+                const areaMaxHeight = 90;
                 const originalWidth = imagem.width;
                 const originalHeight = imagem.height;
                 // Calcula a escala para caber dentro da área máxima, mantendo a proporção
