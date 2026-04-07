@@ -82,50 +82,12 @@
     .month-group { margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
     .month-group label { font-weight: 600; width: 110px; font-size: 0.8rem; }
     .month-group input[type="file"] { flex: 1; }
-
-    /* LOADING OVERLAY EM TELA CHEIA */
-    .fullscreen-loader {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(4px);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 9999;
-      visibility: hidden;
-      opacity: 0;
-      transition: visibility 0s, opacity 0.3s;
-    }
-    .fullscreen-loader.active {
-      visibility: visible;
-      opacity: 1;
-    }
-    .loader-spinner {
-      width: 70px;
-      height: 70px;
-      border: 8px solid rgba(255,255,255,0.3);
-      border-top-color: #3b82f6;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    .loader-text {
-      margin-top: 1.5rem;
-      font-size: 1.2rem;
-      font-weight: 600;
-      color: white;
-      background: rgba(0,0,0,0.6);
-      padding: 0.5rem 1.2rem;
-      border-radius: 2rem;
-      letter-spacing: 1px;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    .image-preview { max-width: 100%; max-height: 100px; margin-top: 0.5rem; border-radius: 0.5rem; border: 1px solid #cbd5e1; object-fit: contain; background: #f8fafc; }
+    .fullscreen-loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; visibility: hidden; opacity: 0; transition: visibility 0s, opacity 0.3s; }
+    .fullscreen-loader.active { visibility: visible; opacity: 1; }
+    .loader-spinner { width: 70px; height: 70px; border: 8px solid rgba(255,255,255,0.3); border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; }
+    .loader-text { margin-top: 1.5rem; font-size: 1.2rem; font-weight: 600; color: white; background: rgba(0,0,0,0.6); padding: 0.5rem 1.2rem; border-radius: 2rem; letter-spacing: 1px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
@@ -134,12 +96,7 @@
 
 <div class="dashboard-header">
   <div class="header-left">
-    <img 
-      src="https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/Tenda_logo2.png" 
-      alt="Logo TENDEX" 
-      class="logo"
-      onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%233b82f6%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z%22%3E%3C/path%3E%3Cpolyline points=%229 22 9 12 15 12 15 22%22%3E%3C/polyline%3E%3C/svg%3E';"
-    >
+    <img src="https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/Tenda_logo2.png" alt="Logo TENDEX" class="logo" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%233b82f6%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z%22%3E%3C/path%3E%3Cpolyline points=%229 22 9 12 15 12 15 22%22%3E%3C/polyline%3E%3C/svg%3E';">
     <h1></h1>
   </div>
   <div style="display: flex; gap: 1rem; align-items: center;">
@@ -150,15 +107,9 @@
 <!-- Modal de confirmação de logout -->
 <div id="logoutModal" class="modal">
   <div class="modal-content logout-modal-content">
-    <div class="modal-header">
-      <h2>🔓 Sair do Sistema</h2>
-      <button class="close-modal" id="closeLogoutModalBtn">&times;</button>
-    </div>
+    <div class="modal-header"><h2>🔓 Sair do Sistema</h2><button class="close-modal" id="closeLogoutModalBtn">&times;</button></div>
     <p>Tem certeza que deseja sair?</p>
-    <div class="logout-buttons">
-      <button class="btn-cancel-logout" id="cancelLogoutBtn">Cancelar</button>
-      <button class="btn-confirm" id="confirmLogoutBtn">Sair</button>
-    </div>
+    <div class="logout-buttons"><button class="btn-cancel-logout" id="cancelLogoutBtn">Cancelar</button><button class="btn-confirm" id="confirmLogoutBtn">Sair</button></div>
   </div>
 </div>
 
@@ -204,11 +155,15 @@
   <div class="modal-content">
     <div class="modal-header"><h2 id="formModalTitle">Formulário de Inspeção</h2><button class="close-modal" id="closeFormModalBtn">&times;</button></div>
     <div id="formFieldsContainer"></div>
+    <div class="form-group">
+      <label>📸 Foto da Inspeção (opcional)</label>
+      <input type="file" id="fotoInspecao" accept="image/png, image/jpeg">
+      <div id="fotoPreview" style="margin-top: 0.5rem;"></div>
+    </div>
     <div class="modal-buttons"><button class="btn-cancel" id="cancelFormBtn">Cancelar</button><button class="btn-save" id="generatePdfBtn">Gerar PDF e Anexar</button></div>
   </div>
 </div>
 
-<!-- FULLSCREEN LOADER -->
 <div id="fullscreenLoader" class="fullscreen-loader">
   <div class="loader-spinner"></div>
   <div class="loader-text">🔃 Gerando PDF, aguarde...</div>
@@ -216,34 +171,25 @@
 
 <script>
   (function() {
-    // ==================== CONFIGURAÇÃO SUPABASE ====================
     const SUPABASE_URL = "https://jklcvyuxwxgsfczrfaco.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_oCE8y5qaLovVj0BU-rANHA__Zmy3XVl";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // ==================== INFORMAÇÕES DO USUÁRIO LOGADO ====================
     let currentUser = null;
     try {
       const savedUser = localStorage.getItem('tendex_current_user');
-      if (savedUser) {
-        currentUser = JSON.parse(savedUser);
-      }
+      if (savedUser) currentUser = JSON.parse(savedUser);
     } catch(e) { console.warn(e); }
     
     const userInfoDisplay = document.getElementById('userInfoDisplay');
-    if (currentUser && currentUser.username) {
-      userInfoDisplay.innerHTML = ` ${currentUser.username} `;
-    } else {
-      userInfoDisplay.innerHTML = `👤 Não logado`;
-      window.location.href = 'index.html';
-    }
+    if (currentUser && currentUser.username) userInfoDisplay.innerHTML = ` ${currentUser.username} `;
+    else { userInfoDisplay.innerHTML = `👤 Não logado`; window.location.href = 'index.html'; }
 
-    // ==================== MODAL DE LOGOUT ====================
+    // Logout modal
     const logoutModal = document.getElementById('logoutModal');
     const closeLogoutModalBtn = document.getElementById('closeLogoutModalBtn');
     const cancelLogoutBtn = document.getElementById('cancelLogoutBtn');
     const confirmLogoutBtn = document.getElementById('confirmLogoutBtn');
-
     userInfoDisplay.addEventListener('click', () => { logoutModal.style.display = 'flex'; });
     function closeLogoutModal() { logoutModal.style.display = 'none'; }
     closeLogoutModalBtn.addEventListener('click', closeLogoutModal);
@@ -283,12 +229,9 @@
       "[Inspeção] A lona de cobertura está sem nenhuma deformação ocasionada por acumulo de água, folhas, minério, etc.?"
     ];
 
-    let currentFormItemId = null;
-    let currentFormCategory = null;
-    let currentFormMonthName = null;
-    let currentItemInfo = null;
+    let currentFormItemId = null, currentFormCategory = null, currentFormMonthName = null, currentItemInfo = null;
+    let currentItems = [];
 
-    // ==================== FUNÇÕES DE BANCO ====================
     async function getAllItemsWithFiles() {
       const { data: items, error: itemsError } = await supabase.from('items').select('*').order('id', { ascending: true });
       if (itemsError) throw itemsError;
@@ -344,34 +287,26 @@
       return itemIdFinal;
     }
 
-    // ==================== FUNÇÃO CORRIGIDA: ASSINATURA COM PROPORÇÃO ORIGINAL ====================
     async function adicionarInfoItemEAssinatura(pdfDoc, itemCode, itemTamanho) {
       try {
         const pages = pdfDoc.getPages();
         if (pages.length === 0) return pdfDoc;
-        
         const pagina = pages[0];
         const { width, height } = pagina.getSize();
         const { StandardFonts, rgb } = window.PDFLib;
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        
         const posX = width - 210;
         let posY = 130;
-        
-        pagina.drawText(`ID / TAG: ${itemCode}`, { x: posX, y: posY, size: 10, font: boldFont, color: rgb(0, 0, 0) });
+        pagina.drawText(`ID / TAG: ${itemCode}`, { x: posX, y: posY, size: 10, font: boldFont, color: rgb(0,0,0) });
         posY -= 18;
-        
-        pagina.drawText(`TAMANHO: ${itemTamanho || 'Não informado'}`, { x: posX, y: posY, size: 10, font: boldFont, color: rgb(0, 0, 0) });
+        pagina.drawText(`TAMANHO: ${itemTamanho || 'Não informado'}`, { x: posX, y: posY, size: 10, font: boldFont, color: rgb(0,0,0) });
         posY -= 25;
-        
-        pagina.drawLine({ start: { x: posX - 10, y: posY + 8 }, end: { x: width - 30, y: posY + 8 }, thickness: 1, color: rgb(0.5, 0.5, 0.5) });
-        pagina.drawText("Assinatura do Responsável", { x: posX - 10, y: posY - 5, size: 8, font: font, color: rgb(0.5, 0.5, 0.5) });
-        
+        pagina.drawLine({ start: { x: posX-10, y: posY+8 }, end: { x: width-30, y: posY+8 }, thickness: 1, color: rgb(0.5,0.5,0.5) });
+        pagina.drawText("Assinatura do Responsável", { x: posX-10, y: posY-5, size: 8, font: font, color: rgb(0.5,0.5,0.5) });
         if (currentUser && currentUser.username) {
           const nomeUsuario = currentUser.username.toLowerCase();
           const assinaturaUrl = `https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/${nomeUsuario}.png`;
-          
           try {
             const response = await fetch(assinaturaUrl);
             if (response.ok) {
@@ -379,36 +314,28 @@
               let imagem;
               try { imagem = await pdfDoc.embedPng(imageBytes); } catch(e) { try { imagem = await pdfDoc.embedJpg(imageBytes); } catch(e2) {} }
               if (imagem) {
-                const areaMaxWidth = 190;
-                const areaMaxHeight = 90;
-                const originalWidth = imagem.width;
-                const originalHeight = imagem.height;
-                const scale = Math.min(areaMaxWidth / originalWidth, areaMaxHeight / originalHeight);
-                const finalWidth = originalWidth * scale;
-                const finalHeight = originalHeight * scale;
-                const imgX = width - finalWidth - 30;
-                const imgY = posY - finalHeight - 10;
-                pagina.drawImage(imagem, { x: imgX, y: imgY, width: finalWidth, height: finalHeight });
+                const areaMaxWidth = 180, areaMaxHeight = 80;
+                const scale = Math.min(areaMaxWidth / imagem.width, areaMaxHeight / imagem.height);
+                const finalW = imagem.width * scale, finalH = imagem.height * scale;
+                const imgX = width - finalW - 30, imgY = posY - finalH - 10;
+                pagina.drawImage(imagem, { x: imgX, y: imgY, width: finalW, height: finalH });
               }
             }
-          } catch (err) { console.warn("Erro ao carregar assinatura:", err); }
+          } catch(err) { console.warn(err); }
         }
         return pdfDoc;
-      } catch (err) { console.warn("Erro ao adicionar informações/assinatura:", err); return pdfDoc; }
+      } catch(err) { console.warn(err); return pdfDoc; }
     }
 
-    // ==================== GERAR PDF USANDO O MODELO ====================
     const MODELO_PDF_URL = "https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/pdfs/modelo_checklist_com_campos%20(3).pdf";
 
-    async function generateAndAttachPdf(itemId, category, monthName, formData, itemInfo) {
+    async function generateAndAttachPdf(itemId, category, monthName, formData, itemInfo, fotoFile) {
       try {
         if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
         const { PDFDocument } = window.PDFLib;
-        
         const modelBytes = await fetch(MODELO_PDF_URL).then(res => res.arrayBuffer());
         const pdfDoc = await PDFDocument.load(modelBytes);
         const form = pdfDoc.getForm();
-
         const camposCabecalho = [
           { nome: "unidade", valor: formData.unidade || "" },
           { nome: "localidade", valor: formData.localidade || "" },
@@ -417,33 +344,38 @@
           { nome: "data", valor: formData.data_inspecao || "" },
           { nome: "empresa", valor: formData.empresa || "" }
         ];
-        for (const campo of camposCabecalho) {
-          try { form.getTextField(campo.nome).setText(campo.valor); } catch(e) {}
-        }
-        
-        for (let i = 1; i <= 25; i++) {
+        for (const campo of camposCabecalho) try { form.getTextField(campo.nome).setText(campo.valor); } catch(e) {}
+        for (let i=1; i<=25; i++) {
           const resposta = formData[`resp_${i-1}`] || "Não respondido";
           try { form.getTextField(`${i}`).setText(resposta); } catch(e) {}
         }
-        
         await adicionarInfoItemEAssinatura(pdfDoc, itemInfo.code, itemInfo.tamanho);
-        
+        if (fotoFile) {
+          const fotoBytes = await fotoFile.arrayBuffer();
+          let fotoImage;
+          try { fotoImage = await pdfDoc.embedPng(fotoBytes); } catch { fotoImage = await pdfDoc.embedJpg(fotoBytes); }
+          if (fotoImage) {
+            const fotoMaxWidth = 300, fotoMaxHeight = 200;
+            const scale = Math.min(fotoMaxWidth / fotoImage.width, fotoMaxHeight / fotoImage.height);
+            const finalW = fotoImage.width * scale, finalH = fotoImage.height * scale;
+            const page = pdfDoc.getPages()[0];
+            const { width, height } = page.getSize();
+            // Ajuste as coordenadas abaixo conforme o local desejado
+            const fotoX = width - finalW - 30;   // alinhado à direita
+            const fotoY = 50;                   // posição vertical (ajuste)
+            page.drawImage(fotoImage, { x: fotoX, y: fotoY, width: finalW, height: finalH });
+          }
+        }
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const file = new File([blob], `checklist_${monthName}_${Date.now()}.pdf`, { type: 'application/pdf' });
         await addFileToItem(itemId, category, file);
-        
         alert(`✅ PDF gerado!\nID: ${itemInfo.code} | Tamanho: ${itemInfo.tamanho || 'N/I'}\nAssinatura: ${currentUser?.username || 'usuário'}`);
         await refreshData();
         await openDetailModal(itemId);
-      } catch (err) {
-        console.error(err);
-        alert("Erro ao gerar PDF: " + err.message);
-      }
+      } catch(err) { console.error(err); alert("Erro ao gerar PDF: " + err.message); }
     }
 
-    // ==================== RENDERIZAÇÃO ====================
-    let currentItems = [];
     function renderCards(filterText = "") {
       const container = document.getElementById('itemsContainer');
       const lowerFilter = filterText.toLowerCase();
@@ -455,10 +387,7 @@
     function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
     async function refreshData() { currentItems = await getAllItemsWithFiles(); renderCards(document.getElementById('searchInput').value); }
 
-    // ==================== MODAIS ====================
-    const detailModal = document.getElementById('detailModal');
-    const detailContent = document.getElementById('detailContent');
-    const closeDetailModalBtn = document.getElementById('closeDetailModalBtn');
+    const detailModal = document.getElementById('detailModal'), detailContent = document.getElementById('detailContent'), closeDetailModalBtn = document.getElementById('closeDetailModalBtn');
     if (closeDetailModalBtn) closeDetailModalBtn.addEventListener('click', () => detailModal.style.display = 'none');
     detailModal.addEventListener('click', (e) => { if (e.target === detailModal) detailModal.style.display = 'none'; });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && detailModal.style.display === 'flex') detailModal.style.display = 'none'; });
@@ -480,7 +409,7 @@
       const monthlyFiles = monthKeys.map(key => files.find(f => f.category === key));
       let html = `<div class="item-detail-title"><strong>${escapeHtml(item.name)}</strong><br>${item.sub_localizacao ? `📍 Sub. Localização: ${escapeHtml(item.sub_localizacao)}<br>` : ''}${item.tamanho ? `📏 Tamanho: ${escapeHtml(item.tamanho)}<br>` : ''}ID: ${escapeHtml(item.code)}</div><div class="pdf-group"><div class="pdf-group-title">📄 Memorial de Cálculo</div>${renderDetailPdfRow('memorial', 'Memorial', memorialFile, item.id)}</div><div class="pdf-group"><div class="pdf-group-title">📅 Documentos Mensais</div>${monthNames.map((month, idx) => renderDetailPdfRow(monthKeys[idx], month, monthlyFiles[idx], item.id, true)).join('')}</div><button class="delete-item-btn" id="deleteItemFromDetailBtn">🗑️ Excluir este item</button><div class="notice">* Clique nos botões + para anexar/substituir PDFs. Clique em 📝 para preencher formulário e gerar PDF.</div>`;
       detailContent.innerHTML = html;
-      document.querySelectorAll('.upload-pdf-btn').forEach(btn => btn.addEventListener('click', async (e) => { const itemId = Number(btn.dataset.itemid); const category = btn.dataset.category; const input = document.createElement('input'); input.type = 'file'; input.accept = '.pdf'; input.onchange = async (ev) => { const file = ev.target.files[0]; if (file && file.type === 'application/pdf') { await addFileToItem(itemId, category, file); refreshData(); openDetailModal(itemId); } }; input.click(); }));
+      document.querySelectorAll('.upload-pdf-btn').forEach(btn => btn.addEventListener('click', async (e) => { const itemId = Number(btn.dataset.itemid), category = btn.dataset.category, input = document.createElement('input'); input.type = 'file'; input.accept = '.pdf'; input.onchange = async (ev) => { const file = ev.target.files[0]; if (file && file.type === 'application/pdf') { await addFileToItem(itemId, category, file); refreshData(); openDetailModal(itemId); } }; input.click(); }));
       document.querySelectorAll('.remove-pdf-btn').forEach(btn => btn.addEventListener('click', async (e) => { if (confirm('Remover este PDF?')) { await deleteFileById(Number(btn.dataset.fileid)); refreshData(); openDetailModal(item.id); } }));
       document.querySelectorAll('.fill-form-btn').forEach(btn => btn.addEventListener('click', () => openFormModal(Number(btn.dataset.itemid), btn.dataset.category, btn.dataset.monthname)));
       const deleteBtn = document.getElementById('deleteItemFromDetailBtn');
@@ -492,25 +421,36 @@
       else return `<div class="pdf-row"><span class="pdf-label">${escapeHtml(label)}</span><div class="pdf-file-info">— Nenhum PDF anexado —</div><div class="pdf-actions"><button class="upload-pdf-btn" data-itemid="${itemId}" data-category="${category}" title="Adicionar PDF">➕</button>${showFormButton ? `<button class="fill-form-btn" data-itemid="${itemId}" data-category="${category}" data-monthname="${label}" title="Preencher formulário">📝</button>` : ''}</div></div>`;
     }
 
-    // ==================== FORMULÁRIO COM LOADING FULLSCREEN ====================
     const formModal = document.getElementById('formModal');
     const formFieldsContainer = document.getElementById('formFieldsContainer');
     const closeFormModalBtn = document.getElementById('closeFormModalBtn');
     const cancelFormBtn = document.getElementById('cancelFormBtn');
     const generatePdfBtn = document.getElementById('generatePdfBtn');
     const fullscreenLoader = document.getElementById('fullscreenLoader');
+    const fotoInput = document.getElementById('fotoInspecao');
+    const fotoPreview = document.getElementById('fotoPreview');
+
+    if (fotoInput) {
+      fotoInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function(event) { fotoPreview.innerHTML = `<img src="${event.target.result}" class="image-preview" alt="Preview">`; };
+          reader.readAsDataURL(file);
+        } else { fotoPreview.innerHTML = ''; }
+      });
+    }
 
     function openFormModal(itemId, category, monthName) {
-      currentFormItemId = itemId; 
-      currentFormCategory = category; 
-      currentFormMonthName = monthName;
+      currentFormItemId = itemId; currentFormCategory = category; currentFormMonthName = monthName;
       const itemAtual = currentItems.find(i => i.id === itemId);
       currentItemInfo = itemAtual || { name: '', code: '', tamanho: '' };
-      
       document.getElementById('formModalTitle').innerText = `Formulário de Inspeção - ${monthName}`;
       let html = `<div class="form-row"><div class="form-group"><label>Unidade</label><input type="text" id="unidade" placeholder="Ex: Matriz"></div><div class="form-group"><label>Nome da Localidade</label><input type="text" id="localidade"></div></div><div class="form-row"><div class="form-group"><label>Responsável - Nome</label><input type="text" id="resp_nome"></div><div class="form-group"><label>Responsável - Matrícula</label><input type="text" id="resp_matricula"></div></div><div class="form-row"><div class="form-group"><label>Data da Inspeção</label><input type="date" id="data_inspecao"></div><div class="form-group"><label>Empresa</label><input type="text" id="empresa"></div></div><hr style="margin: 1rem 0;"><h3>Checklist de Inspeção</h3>`;
-      for (let i = 0; i < checklistPerguntas.length; i++) html += `<div class="question-group"><div class="question-text">${i+1}. ${escapeHtml(checklistPerguntas[i])}</div><div class="question-options"><label><input type="radio" name="resp_${i}" value="Conforme"> Conforme</label><label><input type="radio" name="resp_${i}" value="Não conforme"> Não conforme</label><label><input type="radio" name="resp_${i}" value="Não se aplica"> Não se aplica</label></div><div class="question-obs"><input type="text" placeholder="Observação (opcional)" id="obs_${i}" style="width:100%;"></div></div>`;
+      for (let i=0; i<checklistPerguntas.length; i++) html += `<div class="question-group"><div class="question-text">${i+1}. ${escapeHtml(checklistPerguntas[i])}</div><div class="question-options"><label><input type="radio" name="resp_${i}" value="Conforme"> Conforme</label><label><input type="radio" name="resp_${i}" value="Não conforme"> Não conforme</label><label><input type="radio" name="resp_${i}" value="Não se aplica"> Não se aplica</label></div><div class="question-obs"><input type="text" placeholder="Observação (opcional)" id="obs_${i}" style="width:100%;"></div></div>`;
       formFieldsContainer.innerHTML = html;
+      if (fotoInput) fotoInput.value = '';
+      if (fotoPreview) fotoPreview.innerHTML = '';
       formModal.style.display = 'flex';
     }
 
@@ -523,40 +463,25 @@
         data_inspecao: document.getElementById('data_inspecao')?.value || '',
         empresa: document.getElementById('empresa')?.value || ''
       };
-      for (let i = 0; i < checklistPerguntas.length; i++) {
+      for (let i=0; i<checklistPerguntas.length; i++) {
         const radio = document.querySelector(`input[name="resp_${i}"]:checked`);
         formData[`resp_${i}`] = radio ? radio.value : "Não respondido";
       }
       if (!formData.data_inspecao || !formData.resp_nome) { alert("Preencha Data e Responsável."); return; }
-      
-      // Mostra loader fullscreen
+      const fotoFile = document.getElementById('fotoInspecao')?.files[0] || null;
       fullscreenLoader.classList.add('active');
-      
-      try { 
-        await generateAndAttachPdf(currentFormItemId, currentFormCategory, currentFormMonthName, formData, currentItemInfo); 
-        formModal.style.display = 'none'; 
-      } catch (err) { 
-        alert("Erro: " + err.message); 
-      } finally {
-        fullscreenLoader.classList.remove('active');
-      }
+      try {
+        await generateAndAttachPdf(currentFormItemId, currentFormCategory, currentFormMonthName, formData, currentItemInfo, fotoFile);
+        formModal.style.display = 'none';
+      } catch(err) { alert("Erro: " + err.message); } finally { fullscreenLoader.classList.remove('active'); }
     });
 
     closeFormModalBtn.addEventListener('click', () => formModal.style.display = 'none');
     cancelFormBtn.addEventListener('click', () => formModal.style.display = 'none');
 
-    // ==================== CRIAÇÃO DE ITEM ====================
     const createModal = document.getElementById('createItemModal');
-    const closeCreateBtn = document.getElementById('closeCreateModalBtn');
-    const cancelCreateBtn = document.getElementById('cancelCreateBtn');
-    const confirmCreateBtn = document.getElementById('confirmCreateBtn');
-    const newItemName = document.getElementById('newItemName');
-    const newSubLocalizacao = document.getElementById('newSubLocalizacao');
-    const newTamanho = document.getElementById('newTamanho');
-    const newItemCode = document.getElementById('newItemCode');
-    const newMemorialFile = document.getElementById('newMemorialFile');
-    const newMonthlyContainer = document.getElementById('newMonthlyFilesContainer');
-    const createCodeError = document.getElementById('createCodeError');
+    const closeCreateBtn = document.getElementById('closeCreateModalBtn'), cancelCreateBtn = document.getElementById('cancelCreateBtn'), confirmCreateBtn = document.getElementById('confirmCreateBtn');
+    const newItemName = document.getElementById('newItemName'), newSubLocalizacao = document.getElementById('newSubLocalizacao'), newTamanho = document.getElementById('newTamanho'), newItemCode = document.getElementById('newItemCode'), newMemorialFile = document.getElementById('newMemorialFile'), newMonthlyContainer = document.getElementById('newMonthlyFilesContainer'), createCodeError = document.getElementById('createCodeError');
     function buildNewMonthlyInputs() { newMonthlyContainer.innerHTML = ''; monthNames.forEach((month, idx) => { const div = document.createElement('div'); div.className = 'month-group'; const label = document.createElement('label'); label.textContent = month + ':'; const input = document.createElement('input'); input.type = 'file'; input.accept = '.pdf'; input.id = `new_month_${monthKeys[idx]}`; div.appendChild(label); div.appendChild(input); newMonthlyContainer.appendChild(div); }); }
     buildNewMonthlyInputs();
     function openCreateModal() { newItemName.value = ''; newSubLocalizacao.value = ''; newTamanho.value = ''; newItemCode.value = ''; newMemorialFile.value = ''; monthKeys.forEach(key => { const inp = document.getElementById(`new_month_${key}`); if (inp) inp.value = ''; }); createCodeError.innerText = ''; createModal.style.display = 'flex'; }
@@ -569,11 +494,10 @@
       const filesToProcess = [];
       if (newMemorialFile.files.length > 0) filesToProcess.push({ category: 'memorial', file: newMemorialFile.files[0] });
       else filesToProcess.push({ category: 'memorial', file: null });
-      for (let i = 0; i < monthKeys.length; i++) { const key = monthKeys[i]; const inp = document.getElementById(`new_month_${key}`); if (inp && inp.files.length > 0) filesToProcess.push({ category: key, file: inp.files[0] }); else filesToProcess.push({ category: key, file: null }); }
-      try { await saveItemComplete(null, name, sub_localizacao, tamanho, code, filesToProcess); createModal.style.display = 'none'; refreshData(); } catch (err) { if (err.message.includes('código')) createCodeError.innerText = err.message; else alert('Erro ao criar item: ' + err.message); }
+      for (let i=0; i<monthKeys.length; i++) { const key = monthKeys[i]; const inp = document.getElementById(`new_month_${key}`); if (inp && inp.files.length > 0) filesToProcess.push({ category: key, file: inp.files[0] }); else filesToProcess.push({ category: key, file: null }); }
+      try { await saveItemComplete(null, name, sub_localizacao, tamanho, code, filesToProcess); createModal.style.display = 'none'; refreshData(); } catch(err) { if (err.message.includes('código')) createCodeError.innerText = err.message; else alert('Erro ao criar item: ' + err.message); }
     });
 
-    // ==================== DOWNLOAD POR MÊS ====================
     async function downloadMonthPDFs(category, monthName) {
       try {
         if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
@@ -588,10 +512,9 @@
         const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a'); a.href = url; a.download = `todos_${monthName}.pdf`; a.click(); URL.revokeObjectURL(url);
-      } catch (err) { alert(`Erro: ${err.message}`); }
+      } catch(err) { alert(`Erro: ${err.message}`); }
     }
 
-    // ==================== INICIALIZAÇÃO ====================
     document.getElementById('addItemBtn').addEventListener('click', openCreateModal);
     document.getElementById('searchInput').addEventListener('input', (e) => renderCards(e.target.value));
     const monthContainer = document.getElementById('monthButtonsContainer');
