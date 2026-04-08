@@ -173,6 +173,7 @@
     const SUPABASE_URL = "https://jklcvyuxwxgsfczrfaco.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_oCE8y5qaLovVj0BU-rANHA__Zmy3XVl";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const BUCKET = "pdfs";
 
     let currentUser = null;
     try {
@@ -231,6 +232,22 @@
     let currentFormItemId = null, currentFormCategory = null, currentFormMonthName = null, currentItemInfo = null;
     let currentItems = [];
 
+    // Helper para extrair o caminho do arquivo dentro do bucket a partir da URL pública
+    function getStoragePathFromUrl(url) {
+      const regex = /\/storage\/v1\/object\/public\/pdfs\/(.+)$/;
+      const match = url.match(regex);
+      return match ? match[1] : null;
+    }
+
+    // Deletar arquivo do storage
+    async function deleteStorageFile(fileUrl) {
+      const path = getStoragePathFromUrl(fileUrl);
+      if (!path) return false;
+      const { error } = await supabase.storage.from(BUCKET).remove([path]);
+      if (error) console.error("Erro ao deletar arquivo do storage:", error);
+      return !error;
+    }
+
     async function getAllItemsWithFiles() {
       const { data: items, error: itemsError } = await supabase.from('items').select('*').order('id', { ascending: true });
       if (itemsError) throw itemsError;
@@ -242,45 +259,107 @@
     }
 
     async function addFileToItem(itemId, category, file) {
+      // Verificar se já existe um arquivo para esta categoria
+      const { data: existing, error: findError } = await supabase
+        .from('files')
+        .select('id, file_url')
+        .eq('item_id', itemId)
+        .eq('category', category)
+        .maybeSingle();
+      if (findError) throw findError;
+
+      // Se existir, deletar o arquivo antigo do storage
+      if (existing && existing.file_url) {
+        await deleteStorageFile(existing.file_url);
+        // Deletar o registro antigo do banco (será substituído)
+        await supabase.from('files').delete().eq('id', existing.id);
+      }
+
+      // Fazer upload do novo arquivo
       const fileExt = file.name.split('.').pop();
       const filePath = `itens/${itemId}/${category}_${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from('pdfs').upload(filePath, file);
+      const { error: uploadError } = await supabase.storage.from(BUCKET).upload(filePath, file);
       if (uploadError) throw uploadError;
-      const { data: publicUrlData } = supabase.storage.from('pdfs').getPublicUrl(filePath);
+      const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(filePath);
       const fileUrl = publicUrlData.publicUrl;
-      const { data: existing, error: findError } = await supabase.from('files').select('id').eq('item_id', itemId).eq('category', category).maybeSingle();
-      if (findError) throw findError;
-      if (existing) await supabase.from('files').update({ file_name: file.name, file_url: fileUrl }).eq('id', existing.id);
-      else await supabase.from('files').insert({ item_id: itemId, category, file_name: file.name, file_url: fileUrl });
+
+      // Inserir novo registro
+      const { error: insertError } = await supabase.from('files').insert({
+        item_id: itemId,
+        category,
+        file_name: file.name,
+        file_url: fileUrl
+      });
+      if (insertError) throw insertError;
     }
 
-    async function deleteFileById(fileId) { await supabase.from('files').delete().eq('id', fileId); }
-    async function deleteItemAndFiles(itemId) { await supabase.from('items').delete().eq('id', itemId); }
+    async function deleteFileById(fileId) {
+      // Buscar o arquivo para obter a URL
+      const { data: file, error: findError } = await supabase.from('files').select('file_url').eq('id', fileId).single();
+      if (findError) throw findError;
+      if (file && file.file_url) {
+        await deleteStorageFile(file.file_url);
+      }
+      const { error } = await supabase.from('files').delete().eq('id', fileId);
+      if (error) throw error;
+    }
+
+    async function deleteItemAndFiles(itemId) {
+      // Buscar todos os arquivos do item
+      const { data: files, error: findError } = await supabase.from('files').select('file_url').eq('item_id', itemId);
+      if (findError) throw findError;
+      // Deletar cada arquivo do storage
+      for (const file of files) {
+        if (file.file_url) await deleteStorageFile(file.file_url);
+      }
+      // Deletar o item (a foreign key ON DELETE CASCADE removerá os registros da tabela files)
+      const { error } = await supabase.from('items').delete().eq('id', itemId);
+      if (error) throw error;
+    }
 
     async function saveItemComplete(itemId, name, sub_localizacao, tamanho, code, filesToProcess) {
       const { data: existing, error: dupError } = await supabase.from('items').select('id').eq('code', code).maybeSingle();
       if (dupError) throw dupError;
       if (existing && existing.id !== itemId) throw new Error(`O código "${code}" já está em uso.`);
+      
+      // Processar uploads dos novos arquivos (substituição já tratada em addFileToItem)
       const uploadedUrls = [];
       for (const item of filesToProcess) {
         if (item.file) {
           const fileExt = item.file.name.split('.').pop();
           const tempId = itemId || 'temp';
           const filePath = `itens/${tempId}/${item.category}_${Date.now()}.${fileExt}`;
-          await supabase.storage.from('pdfs').upload(filePath, item.file);
-          const { data: publicUrlData } = supabase.storage.from('pdfs').getPublicUrl(filePath);
+          await supabase.storage.from(BUCKET).upload(filePath, item.file);
+          const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(filePath);
           uploadedUrls.push({ category: item.category, url: publicUrlData.publicUrl, fileName: item.file.name });
-        } else uploadedUrls.push({ category: item.category, url: null });
+        } else {
+          uploadedUrls.push({ category: item.category, url: null });
+        }
       }
+
       let itemIdFinal = itemId;
       const itemData = { name, sub_localizacao, tamanho, code };
-      if (itemId) await supabase.from('items').update(itemData).eq('id', itemId);
-      else { const { data: newItem } = await supabase.from('items').insert(itemData).select().single(); itemIdFinal = newItem.id; }
+      if (itemId) {
+        await supabase.from('items').update(itemData).eq('id', itemId);
+      } else {
+        const { data: newItem } = await supabase.from('items').insert(itemData).select().single();
+        itemIdFinal = newItem.id;
+      }
+
+      // Para cada categoria, se houver novo arquivo, substituir (deletar antigo e inserir)
       for (const fileInfo of uploadedUrls) {
         if (fileInfo.url) {
-          const { data: existingFile } = await supabase.from('files').select('id').eq('item_id', itemIdFinal).eq('category', fileInfo.category).maybeSingle();
-          if (existingFile) await supabase.from('files').update({ file_name: fileInfo.fileName, file_url: fileInfo.url }).eq('id', existingFile.id);
-          else await supabase.from('files').insert({ item_id: itemIdFinal, category: fileInfo.category, file_name: fileInfo.fileName, file_url: fileInfo.url });
+          const { data: existingFile } = await supabase.from('files').select('id, file_url').eq('item_id', itemIdFinal).eq('category', fileInfo.category).maybeSingle();
+          if (existingFile) {
+            await deleteStorageFile(existingFile.file_url);
+            await supabase.from('files').delete().eq('id', existingFile.id);
+          }
+          await supabase.from('files').insert({
+            item_id: itemIdFinal,
+            category: fileInfo.category,
+            file_name: fileInfo.fileName,
+            file_url: fileInfo.url
+          });
         }
       }
       return itemIdFinal;
@@ -359,16 +438,23 @@
             const finalW = fotoImage.width * scale, finalH = fotoImage.height * scale;
             const page = pdfDoc.getPages()[0];
             const { width, height } = page.getSize();
-            // Posiciona no canto superior esquerdo
             const fotoX = 30;
-            const fotoY = 100;
+            const fotoY = 30;
             page.drawImage(fotoImage, { x: fotoX, y: fotoY, width: finalW, height: finalH });
           }
         }
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const file = new File([blob], `checklist_${monthName}_${Date.now()}.pdf`, { type: 'application/pdf' });
+        
+        // Substituir o PDF antigo do mês (se existir)
+        const { data: existingFile } = await supabase.from('files').select('id, file_url').eq('item_id', itemId).eq('category', category).maybeSingle();
+        if (existingFile && existingFile.file_url) {
+          await deleteStorageFile(existingFile.file_url);
+          await supabase.from('files').delete().eq('id', existingFile.id);
+        }
         await addFileToItem(itemId, category, file);
+        
         alert(`✅ PDF gerado!\nID: ${itemInfo.code} | Tamanho: ${itemInfo.tamanho || 'N/I'}\nAssinatura: ${currentUser?.username || 'usuário'}`);
         await refreshData();
         await openDetailModal(itemId);
