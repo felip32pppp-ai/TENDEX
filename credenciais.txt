@@ -3,3 +3,4 @@ felipe@tendex.com:123:felipe
 admin@tendex.com:123:admin
 waldei@tendex.com:123:waldei
 emanuele@tendex.com:123:emanuele
+daniel@tendex.com:123:daniel
