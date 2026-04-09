@@ -9,7 +9,6 @@
   <link rel="icon" type="image/png" sizes="192x192" href="https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/icon-180.png">
   <link rel="apple-touch-icon" sizes="180x180" href="https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/icon-180.png">
   <style>
-    /* (todo o CSS existente permanece igual, adicione os estilos abaixo) */
     * { margin:0; padding:0; box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f3f6fc; padding: 2rem 1.5rem; }
     .dashboard-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; padding-bottom: 0.75rem; border-bottom: 2px solid #cbd5e1; }
@@ -34,8 +33,6 @@
     .status-badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 2rem; font-size: 0.7rem; font-weight: 600; margin-top: 0.5rem; }
     .status-active { background: #d1fae5; color: #065f46; }
     .status-inactive { background: #fee2e2; color: #991b1b; }
-    .toggle-status-btn { background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 0.2rem 0.4rem; border-radius: 2rem; margin-top: 0.3rem; transition: 0.2s; }
-    .toggle-status-btn:hover { background: #e2e8f0; }
     .empty-state { text-align: center; color: #6c86a3; margin-top: 3rem; }
     .fab { position: fixed; bottom: 2rem; right: 2rem; background: linear-gradient(135deg, #0f2b3d, #1e4a76); color: white; width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; box-shadow: 0 8px 16px rgba(0,0,0,0.2); cursor: pointer; border: none; z-index: 10; }
     .fab:hover { transform: scale(1.05); }
@@ -52,7 +49,17 @@
     .btn-confirm:hover { background: #dc2626; }
     .btn-cancel-logout { background: #64748b; color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 2rem; cursor: pointer; font-weight: 600; }
     .btn-cancel-logout:hover { background: #475569; }
-    .item-detail-title { background: #f1f5f9; padding: 0.8rem; border-radius: 1rem; margin-bottom: 1.2rem; }
+    .item-detail-title { background: #f1f5f9; padding: 0.8rem; border-radius: 1rem; margin-bottom: 1.2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+    .toggle-switch { display: flex; align-items: center; gap: 0.8rem; font-size: 0.85rem; font-weight: 600; }
+    .switch { position: relative; display: inline-block; width: 52px; height: 26px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ef4444; transition: 0.3s; border-radius: 34px; }
+    .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background-color: white; transition: 0.3s; border-radius: 50%; }
+    input:checked + .slider { background-color: #10b981; }
+    input:checked + .slider:before { transform: translateX(26px); }
+    .toggle-label { font-weight: 500; }
+    .toggle-active { color: #10b981; }
+    .toggle-inactive { color: #ef4444; }
     .pdf-group { margin-bottom: 1.2rem; }
     .pdf-group-title { font-weight: 600; font-size: 0.9rem; border-left: 3px solid #3b82f6; padding-left: 0.6rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
     .pdf-row { display: flex; align-items: center; justify-content: space-between; background: #f9fafb; margin-bottom: 0.5rem; padding: 0.4rem 0.8rem; border-radius: 2rem; font-size: 0.75rem; }
@@ -369,6 +376,11 @@
         await saveHistory(itemId, { name: item.name, sub_localizacao: item.sub_localizacao, tamanho: item.tamanho, code: item.code });
         await supabase.from('items').update({ status: 'inactive' }).eq('id', itemId);
         await refreshData();
+        // Atualizar o modal aberto (se estiver aberto)
+        const modal = document.getElementById('detailModal');
+        if (modal && modal.style.display === 'flex') {
+          await openDetailModal(itemId);
+        }
       } else {
         // Reativar: abrir modal para edição
         reactivatingItemId = itemId;
@@ -398,6 +410,8 @@
       }).eq('id', reactivatingItemId);
       document.getElementById('reactivateModal').style.display = 'none';
       await refreshData();
+      // Reabrir o modal com os novos dados
+      await openDetailModal(reactivatingItemId);
     }
 
     // Adicionar assinatura e info no PDF (já existente)
@@ -497,7 +511,7 @@
       } catch(err) { console.error(err); alert("Erro ao gerar PDF: " + err.message); }
     }
 
-    // Renderização dos cards com status e botão toggle
+    // Renderização dos cards com status (sem botão toggle)
     function renderCards(filterText = "") {
       const container = document.getElementById('itemsContainer');
       const lowerFilter = filterText.toLowerCase();
@@ -521,34 +535,18 @@
         const statusText = item.status === 'active' ? 'Ativo' : 'Inativo';
         return `
           <div class="item-card" data-id="${item.id}">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-              <div>
-                <h3>📌 ${escapeHtml(item.name)}</h3>
-                <p>ID: ${escapeHtml(item.code)}</p>
-                ${item.sub_localizacao ? `<p>📍 ${escapeHtml(item.sub_localizacao)}</p>` : ''}
-                ${item.tamanho ? `<p>📏 ${escapeHtml(item.tamanho)}</p>` : ''}
-                <div><span class="status-badge ${statusClass}">${statusText}</span></div>
-                ${inspecaoMsg}
-              </div>
-              <button class="toggle-status-btn" data-id="${item.id}" data-status="${item.status}" title="Ativar/Inativar">🔘</button>
-            </div>
+            <h3>📌 ${escapeHtml(item.name)}</h3>
+            <p>ID: ${escapeHtml(item.code)}</p>
+            ${item.sub_localizacao ? `<p>📍 ${escapeHtml(item.sub_localizacao)}</p>` : ''}
+            ${item.tamanho ? `<p>📏 ${escapeHtml(item.tamanho)}</p>` : ''}
+            <div><span class="status-badge ${statusClass}">${statusText}</span></div>
+            ${inspecaoMsg}
           </div>
         `;
       }).join('');
       
       document.querySelectorAll('.item-card').forEach(card => {
-        card.addEventListener('click', (e) => {
-          if (e.target.classList.contains('toggle-status-btn')) return;
-          openDetailModal(parseInt(card.dataset.id));
-        });
-      });
-      document.querySelectorAll('.toggle-status-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          const id = parseInt(btn.dataset.id);
-          const status = btn.dataset.status;
-          await toggleStatus(id, status);
-        });
+        card.addEventListener('click', () => openDetailModal(parseInt(card.dataset.id)));
       });
     }
     
@@ -583,13 +581,62 @@
       const files = item.files;
       const memorialFile = files.find(f => f.category === 'memorial');
       const monthlyFiles = monthKeys.map(key => files.find(f => f.category === key));
-      let html = `<div class="item-detail-title"><strong>${escapeHtml(item.name)}</strong><br>${item.sub_localizacao ? `📍 Sub. Localização: ${escapeHtml(item.sub_localizacao)}<br>` : ''}${item.tamanho ? `📏 Tamanho: ${escapeHtml(item.tamanho)}<br>` : ''}ID: ${escapeHtml(item.code)}</div><div class="pdf-group"><div class="pdf-group-title">📄 Memorial de Cálculo</div>${renderDetailPdfRow('memorial', 'Memorial', memorialFile, item.id)}</div><div class="pdf-group"><div class="pdf-group-title">📅 Documentos Mensais</div>${monthNames.map((month, idx) => renderDetailPdfRow(monthKeys[idx], month, monthlyFiles[idx], item.id, true)).join('')}</div><button class="delete-item-btn" id="deleteItemFromDetailBtn">🗑️ Excluir este item</button><div class="notice">* Clique nos botões + para anexar/substituir PDFs. Clique em 📝 para preencher formulário e gerar PDF.</div>`;
+      const isActive = item.status === 'active';
+      let html = `
+        <div class="item-detail-title">
+          <div>
+            <strong>${escapeHtml(item.name)}</strong><br>
+            ${item.sub_localizacao ? `📍 Sub. Localização: ${escapeHtml(item.sub_localizacao)}<br>` : ''}
+            ${item.tamanho ? `📏 Tamanho: ${escapeHtml(item.tamanho)}<br>` : ''}
+            ID: ${escapeHtml(item.code)}
+          </div>
+          <div class="toggle-switch">
+            <span class="toggle-label ${!isActive ? 'toggle-inactive' : ''}">Inativo</span>
+            <label class="switch">
+              <input type="checkbox" id="statusToggle" ${isActive ? 'checked' : ''}>
+              <span class="slider"></span>
+            </label>
+            <span class="toggle-label ${isActive ? 'toggle-active' : ''}">Ativo</span>
+          </div>
+        </div>
+        <div class="pdf-group"><div class="pdf-group-title">📄 Memorial de Cálculo</div>${renderDetailPdfRow('memorial', 'Memorial', memorialFile, item.id)}</div>
+        <div class="pdf-group"><div class="pdf-group-title">📅 Documentos Mensais</div>${monthNames.map((month, idx) => renderDetailPdfRow(monthKeys[idx], month, monthlyFiles[idx], item.id, true)).join('')}</div>
+        <button class="delete-item-btn" id="deleteItemFromDetailBtn">🗑️ Excluir este item</button>
+        <div class="notice">* Clique nos botões + para anexar/substituir PDFs. Clique em 📝 para preencher formulário e gerar PDF.</div>
+      `;
       detailContent.innerHTML = html;
+      
+      // Evento do toggle switch
+      const toggleCheckbox = document.getElementById('statusToggle');
+      if (toggleCheckbox) {
+        toggleCheckbox.addEventListener('change', async (e) => {
+          e.stopPropagation();
+          if (e.target.checked) {
+            // Reativar: abre modal de edição
+            reactivatingItemId = item.id;
+            document.getElementById('editItemName').value = item.name;
+            document.getElementById('editSubLocalizacao').value = item.sub_localizacao;
+            document.getElementById('editTamanho').value = item.tamanho;
+            document.getElementById('reactivateModal').style.display = 'flex';
+            // Reverte o checkbox visualmente até confirmar
+            e.target.checked = false;
+          } else {
+            // Inativar
+            if (confirm(`Deseja inativar o item "${item.name}"? Os dados atuais serão salvos no histórico.`)) {
+              await toggleStatus(item.id, 'active');
+            } else {
+              // Reverte o checkbox
+              e.target.checked = true;
+            }
+          }
+        });
+      }
+      
       document.querySelectorAll('.upload-pdf-btn').forEach(btn => btn.addEventListener('click', async (e) => { const itemId = Number(btn.dataset.itemid), category = btn.dataset.category, input = document.createElement('input'); input.type = 'file'; input.accept = '.pdf'; input.onchange = async (ev) => { const file = ev.target.files[0]; if (file && file.type === 'application/pdf') { await addFileToItem(itemId, category, file); refreshData(); openDetailModal(itemId); } }; input.click(); }));
       document.querySelectorAll('.remove-pdf-btn').forEach(btn => btn.addEventListener('click', async (e) => { if (confirm('Remover este PDF?')) { await deleteFileById(Number(btn.dataset.fileid)); refreshData(); openDetailModal(item.id); } }));
       document.querySelectorAll('.fill-form-btn').forEach(btn => btn.addEventListener('click', () => openFormModal(Number(btn.dataset.itemid), btn.dataset.category, btn.dataset.monthname)));
       const deleteBtn = document.getElementById('deleteItemFromDetailBtn');
-      if (deleteBtn) deleteBtn.addEventListener('click', async () => { if (confirm(`Excluir o item "${item.name}"?`)) { await deleteItemAndFiles(item.id); detailModal.style.display = 'none'; refreshData(); } });
+      if (deleteBtn) deleteBtn.addEventListener('click', async () => { if (confirm(`Excluir o item "${item.name}"? Esta ação é irreversível.`)) { await deleteItemAndFiles(item.id); detailModal.style.display = 'none'; refreshData(); } });
     }
 
     function renderDetailPdfRow(category, label, file, itemId, showFormButton = false) {
@@ -674,7 +721,13 @@
     const confirmReactivateBtn = document.getElementById('confirmReactivateBtn');
     closeReactivateModalBtn.addEventListener('click', () => reactivateModal.style.display = 'none');
     cancelReactivateBtn.addEventListener('click', () => reactivateModal.style.display = 'none');
-    confirmReactivateBtn.addEventListener('click', saveReactivate);
+    confirmReactivateBtn.addEventListener('click', async () => {
+      await saveReactivate();
+      // Após reativar, recarregar o modal do item
+      if (reactivatingItemId) {
+        await openDetailModal(reactivatingItemId);
+      }
+    });
 
     // CRIAÇÃO DE ITEM
     const createModal = document.getElementById('createItemModal');
