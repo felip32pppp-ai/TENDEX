@@ -9,6 +9,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/icon-180.png">
   <link rel="apple-touch-icon" sizes="180x180" href="https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/icon-180.png">
   <style>
+    /* (todo o CSS permanece igual ao da sua versão atual - omitido por brevidade, mas você deve manter o mesmo) */
     * { margin:0; padding:0; box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f3f6fc; padding: 2rem 1.5rem; }
     .dashboard-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; padding-bottom: 0.75rem; border-bottom: 2px solid #cbd5e1; }
@@ -330,7 +331,15 @@
       return items.map(item => ({ id: item.id, name: item.name, sub_localizacao: item.sub_localizacao || '', tamanho: item.tamanho || '', code: item.code, status: item.status || 'active', files: filesByItem[item.id] || [] }));
     }
 
+    // Função modificada: ao adicionar arquivo manualmente, salva a data atual (ou data fornecida)
     async function addFileToItem(itemId, category, file, inspecaoData = null) {
+      // Se inspecaoData não foi fornecida, usa a data atual (formato YYYY-MM-DD)
+      let dataInspecao = inspecaoData;
+      if (!dataInspecao) {
+        const now = new Date();
+        dataInspecao = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      }
+      // Verificar se já existe um arquivo para esta categoria
       const { data: existing, error: findError } = await supabase.from('files').select('id, file_url').eq('item_id', itemId).eq('category', category).maybeSingle();
       if (findError) throw findError;
       if (existing && existing.file_url) {
@@ -343,8 +352,7 @@
       if (uploadError) throw uploadError;
       const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(filePath);
       const fileUrl = publicUrlData.publicUrl;
-      const insertData = { item_id: itemId, category, file_name: file.name, file_url: fileUrl };
-      if (inspecaoData) insertData.inspecao_data = inspecaoData;
+      const insertData = { item_id: itemId, category, file_name: file.name, file_url: fileUrl, inspecao_data: dataInspecao };
       const { error: insertError } = await supabase.from('files').insert(insertData);
       if (insertError) throw insertError;
     }
@@ -392,7 +400,10 @@
             await deleteStorageFile(existingFile.file_url);
             await supabase.from('files').delete().eq('id', existingFile.id);
           }
-          await supabase.from('files').insert({ item_id: itemIdFinal, category: fileInfo.category, file_name: fileInfo.fileName, file_url: fileInfo.url });
+          // Para arquivos enviados na criação do item, usar data atual como data de inspeção (opcional)
+          const now = new Date();
+          const dataAtual = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+          await supabase.from('files').insert({ item_id: itemIdFinal, category: fileInfo.category, file_name: fileInfo.fileName, file_url: fileInfo.url, inspecao_data: dataAtual });
         }
       }
       return itemIdFinal;
@@ -416,7 +427,6 @@
       const item = currentItems.find(i => i.id === itemId);
       if (!item) return;
       if (newStatus === 'inactive') {
-        // Inativar: salvar histórico
         if (confirm('Inativar este item? Os dados atuais serão salvos no histórico.')) {
           await saveHistory(itemId, { name: item.name, sub_localizacao: item.sub_localizacao, tamanho: item.tamanho, code: item.code });
           await supabase.from('items').update({ status: 'inactive' }).eq('id', itemId);
@@ -424,7 +434,6 @@
           if (detailModalRef && detailModalRef.style.display === 'flex') detailModalRef.style.display = 'none';
         }
       } else if (newStatus === 'active') {
-        // Reativar: abrir modal de edição sobre o modal de detalhes
         reactivatingItemId = itemId;
         document.getElementById('editItemName').value = item.name;
         document.getElementById('editSubLocalizacao').value = item.sub_localizacao;
@@ -433,7 +442,6 @@
       }
     }
 
-    // Salvar edição e reativar
     async function saveReactivate() {
       const newName = document.getElementById('editItemName').value.trim();
       const newSub = document.getElementById('editSubLocalizacao').value.trim();
@@ -441,9 +449,7 @@
       if (!newName) { alert("Localização é obrigatória."); return; }
       const item = currentItems.find(i => i.id === reactivatingItemId);
       if (!item) return;
-      // Salvar estado antigo no histórico
       await saveHistory(reactivatingItemId, { name: item.name, sub_localizacao: item.sub_localizacao, tamanho: item.tamanho, code: item.code });
-      // Atualizar item com novos dados e status ativo
       await supabase.from('items').update({
         name: newName,
         sub_localizacao: newSub,
@@ -537,6 +543,7 @@
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const file = new File([blob], `checklist_${monthName}_${Date.now()}.pdf`, { type: 'application/pdf' });
         
+        // Substituir PDF antigo e salvar com a data do formulário
         const { data: existingFile } = await supabase.from('files').select('id, file_url').eq('item_id', itemId).eq('category', category).maybeSingle();
         if (existingFile && existingFile.file_url) {
           await deleteStorageFile(existingFile.file_url);
@@ -550,7 +557,7 @@
       } catch(err) { console.error(err); alert("Erro ao gerar PDF: " + err.message); }
     }
 
-    // Renderização dos cards com status e botão toggle (agora apenas o badge, sem botão)
+    // Renderização dos cards com a mensagem de inspeção (baseada na data do arquivo)
     function renderCards(filterText = "") {
       const container = document.getElementById('itemsContainer');
       const lowerFilter = filterText.toLowerCase();
@@ -563,7 +570,6 @@
       const mesAtualKey = monthKeys[mesAtualIndex];
       
       container.innerHTML = filtered.map(item => {
-        // Encontrar arquivo do mês atual e verificar se a data de inspeção corresponde ao mês atual
         const arquivoMesAtual = item.files.find(f => f.category === mesAtualKey);
         let inspecaoMsg = '';
         if (arquivoMesAtual && arquivoMesAtual.inspecao_data) {
@@ -632,7 +638,6 @@
       const memorialFile = files.find(f => f.category === 'memorial');
       const monthlyFiles = monthKeys.map(key => files.find(f => f.category === key));
       
-      // Monta o HTML com toggle switch
       let html = `
         <div class="status-container">
           <span style="font-weight: 500;">Status:</span>
@@ -661,7 +666,6 @@
       `;
       detailContent.innerHTML = html;
       
-      // Evento do toggle switch
       const toggle = document.getElementById('statusToggle');
       const statusTextSpan = document.getElementById('statusText');
       if (toggle) {
@@ -672,7 +676,19 @@
         });
       }
       
-      document.querySelectorAll('.upload-pdf-btn').forEach(btn => btn.addEventListener('click', async (e) => { const itemId = Number(btn.dataset.itemid), category = btn.dataset.category, input = document.createElement('input'); input.type = 'file'; input.accept = '.pdf'; input.onchange = async (ev) => { const file = ev.target.files[0]; if (file && file.type === 'application/pdf') { await addFileToItem(itemId, category, file); refreshData(); openDetailModal(itemId); } }; input.click(); }));
+      document.querySelectorAll('.upload-pdf-btn').forEach(btn => btn.addEventListener('click', async (e) => { 
+        const itemId = Number(btn.dataset.itemid), category = btn.dataset.category, input = document.createElement('input'); 
+        input.type = 'file'; input.accept = '.pdf'; 
+        input.onchange = async (ev) => { 
+          const file = ev.target.files[0]; 
+          if (file && file.type === 'application/pdf') { 
+            await addFileToItem(itemId, category, file); 
+            refreshData(); 
+            openDetailModal(itemId); 
+          } 
+        }; 
+        input.click(); 
+      }));
       document.querySelectorAll('.remove-pdf-btn').forEach(btn => btn.addEventListener('click', async (e) => { if (confirm('Remover este PDF?')) { await deleteFileById(Number(btn.dataset.fileid)); refreshData(); openDetailModal(item.id); } }));
       document.querySelectorAll('.fill-form-btn').forEach(btn => btn.addEventListener('click', () => openFormModal(Number(btn.dataset.itemid), btn.dataset.category, btn.dataset.monthname)));
       const deleteBtn = document.getElementById('deleteItemFromDetailBtn');
