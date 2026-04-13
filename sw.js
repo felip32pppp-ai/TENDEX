@@ -3,10 +3,18 @@ const CACHE_NAME = 'tendex-v1';
 const urlsToCache = [
   '/TENDEX/',
   '/TENDEX/dashboard.html',
-  '/TENDEX/index.html',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
-  'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js'
+  '/TENDEX/index.html'
 ];
+
+// URLs que NÃO devem ser interceptadas pelo Service Worker
+const EXCLUDED_URLS = [
+  'supabase.co',
+  'jklcvyuxwxgsfczrfaco.supabase.co'
+];
+
+function isExcluded(url) {
+  return EXCLUDED_URLS.some(excluded => url.includes(excluded));
+}
 
 // Instalação do Service Worker
 self.addEventListener('install', event => {
@@ -38,8 +46,16 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Estratégia de busca: cache first, depois rede
+// Busca - NÃO intercepta requisições para o Supabase
 self.addEventListener('fetch', event => {
+  const url = event.request.url;
+  
+  // Se for uma requisição para o Supabase, deixa passar direto (sem cache)
+  if (isExcluded(url)) {
+    return;
+  }
+  
+  // Para outros recursos, usa cache first
   event.respondWith(
     caches.match(event.request)
       .then(response => response || fetch(event.request))
@@ -49,14 +65,13 @@ self.addEventListener('fetch', event => {
 // Background Sync
 self.addEventListener('sync', event => {
   console.log('Evento sync recebido:', event.tag);
-  if (event.tag === 'sync-inspecoes') {
-    event.waitUntil(sincronizarInspecoes());
+  if (event.tag === 'sync-inspecoes' || event.tag === 'sync-items') {
+    event.waitUntil(sincronizarDados());
   }
 });
 
-// Função de sincronização
-async function sincronizarInspecoes() {
-  console.log('🔄 Sincronizando inspeções pendentes...');
+async function sincronizarDados() {
+  console.log('🔄 Sincronizando dados pendentes...');
   const clients = await self.clients.matchAll();
   clients.forEach(client => {
     client.postMessage({ 
