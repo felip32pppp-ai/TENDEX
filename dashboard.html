@@ -94,6 +94,7 @@
     .loader-text { margin-top: 1.5rem; font-size: 1.2rem; font-weight: 600; color: white; background: rgba(0,0,0,0.6); padding: 0.5rem 1.2rem; border-radius: 2rem; letter-spacing: 1px; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Toggle Switch */
     .toggle-switch {
       position: relative;
       display: inline-block;
@@ -158,24 +159,6 @@
       text-align: center;
       font-size: 0.8rem;
     }
-    .offline-badge {
-      background: #f59e0b;
-      color: white;
-      padding: 0.2rem 0.8rem;
-      border-radius: 2rem;
-      font-size: 0.7rem;
-      font-weight: 600;
-      margin-left: 1rem;
-    }
-    .online-badge {
-      background: #10b981;
-      color: white;
-      padding: 0.2rem 0.8rem;
-      border-radius: 2rem;
-      font-size: 0.7rem;
-      font-weight: 600;
-      margin-left: 1rem;
-    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
@@ -189,10 +172,10 @@
   </div>
   <div style="display: flex; gap: 1rem; align-items: center;">
     <div class="user-info" id="userInfoDisplay">👤 Carregando...</div>
-    <div id="connectionStatus" class="online-badge">🟢 Online</div>
   </div>
 </div>
 
+<!-- Modal de confirmação de logout -->
 <div id="logoutModal" class="modal">
   <div class="modal-content logout-modal-content">
     <div class="modal-header"><h2>🔓 Sair do Sistema</h2><button class="close-modal" id="closeLogoutModalBtn">&times;</button></div>
@@ -201,9 +184,10 @@
   </div>
 </div>
 
+<!-- Modal de edição ao reativar (sobrepõe o modal de detalhes) -->
 <div id="reactivateModal" class="modal" style="z-index: 1001;">
   <div class="modal-content">
-    <div class="modal-header"><h2>✏️ Reativar TENDA</h2><button class="close-modal" id="closeReactivateModalBtn">&times;</button></div>
+    <div class="modal-header"><h2>Reativar TENDA</h2><button class="close-modal" id="closeReactivateModalBtn">&times;</button></div>
     <div class="form-group"><label>Localização *</label><input type="text" id="editItemName" placeholder="Ex: Tenda 5x5"></div>
     <div class="form-group"><label>Sub. Localização</label><input type="text" id="editSubLocalizacao" placeholder="Ex: Área Central"></div>
     <div class="form-group"><label>Tamanho</label><input type="text" id="editTamanho" placeholder="Ex: 5x5m, 10x20m"></div>
@@ -224,6 +208,7 @@
 <div id="itemsContainer" class="items-grid"></div>
 <button class="fab" id="addItemBtn">+</button>
 
+<!-- Modal para criação de novo item -->
 <div id="createItemModal" class="modal">
   <div class="modal-content">
     <div class="modal-header"><h2>➕ Novo Item</h2><button class="close-modal" id="closeCreateModalBtn">&times;</button></div>
@@ -239,6 +224,7 @@
   </div>
 </div>
 
+<!-- Modal de detalhes do item (com toggle switch) -->
 <div id="detailModal" class="modal">
   <div class="modal-content">
     <div class="modal-header"><h2 id="detailModalTitle">Detalhes do Item</h2><button class="close-modal" id="closeDetailModalBtn">&times;</button></div>
@@ -246,12 +232,13 @@
   </div>
 </div>
 
+<!-- Modal do formulário para preencher e gerar PDF -->
 <div id="formModal" class="modal">
   <div class="modal-content">
     <div class="modal-header"><h2 id="formModalTitle">Formulário de Inspeção</h2><button class="close-modal" id="closeFormModalBtn">&times;</button></div>
     <div id="formFieldsContainer"></div>
     <div class="form-group">
-      <label>📸 Foto da Inspeção (obrigatória)</label>
+      <label>Foto da Inspeção (obrigatória)</label>
       <input type="file" id="fotoInspecao" accept="image/png, image/jpeg" required>
       <div id="fotoPreview" style="margin-top: 0.5rem;"></div>
     </div>
@@ -261,7 +248,7 @@
 
 <div id="fullscreenLoader" class="fullscreen-loader">
   <div class="loader-spinner"></div>
-  <div class="loader-text">🔃 Processando, aguarde...</div>
+  <div class="loader-text">Processando, aguarde...</div>
 </div>
 
 <script>
@@ -271,180 +258,6 @@
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const BUCKET = "pdfs";
 
-    // ==================== OFFLINE STORAGE (IndexedDB) ====================
-    const DB_NAME_OFFLINE = 'TendexOfflineDB';
-    const STORE_ITEMS = 'items_cache';
-    const STORE_PENDING = 'pending_inspecoes';
-
-    function initOfflineDB() {
-      return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME_OFFLINE, 3);
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve(request.result);
-        request.onupgradeneeded = (event) => {
-          const db = event.target.result;
-          if (!db.objectStoreNames.contains(STORE_ITEMS)) {
-            db.createObjectStore(STORE_ITEMS, { keyPath: 'id' });
-          }
-          if (!db.objectStoreNames.contains(STORE_PENDING)) {
-            db.createObjectStore(STORE_PENDING, { keyPath: 'id', autoIncrement: true });
-          }
-        };
-      });
-    }
-
-    async function salvarItemsLocal(items) {
-      try {
-        const db = await initOfflineDB();
-        const tx = db.transaction(STORE_ITEMS, 'readwrite');
-        const store = tx.objectStore(STORE_ITEMS);
-        for (const item of items) {
-          store.put(item);
-        }
-        return new Promise((resolve, reject) => {
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-        });
-      } catch (e) { console.warn('Erro ao salvar items local:', e); }
-    }
-
-    async function carregarItemsLocal() {
-      try {
-        const db = await initOfflineDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction(STORE_ITEMS, 'readonly');
-          const store = tx.objectStore(STORE_ITEMS);
-          const request = store.getAll();
-          request.onsuccess = () => resolve(request.result || []);
-          request.onerror = () => reject(request.error);
-        });
-      } catch (e) { console.warn('Erro ao carregar items local:', e); return []; }
-    }
-
-    async function salvarPending(data) {
-      const db = await initOfflineDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_PENDING, 'readwrite');
-        const store = tx.objectStore(STORE_PENDING);
-        const request = store.add(data);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    async function getPendingInspections() {
-      const db = await initOfflineDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_PENDING, 'readonly');
-        const store = tx.objectStore(STORE_PENDING);
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result || []);
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    async function removerPending(id) {
-      const db = await initOfflineDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_PENDING, 'readwrite');
-        const store = tx.objectStore(STORE_PENDING);
-        const request = store.delete(id);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    async function registrarSync() {
-      if ('serviceWorker' in navigator && 'SyncManager' in window) {
-        const registration = await navigator.serviceWorker.ready;
-        try {
-          await registration.sync.register('sync-inspecoes');
-          console.log('Sync registrado com sucesso');
-        } catch (error) {
-          console.error('Falha ao registrar sync:', error);
-        }
-      }
-    }
-
-    function blobToBase64(blob) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-    }
-
-    function base64ToBlob(base64, mimeType) {
-      const byteCharacters = atob(base64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      return new Blob([byteArray], { type: mimeType });
-    }
-
-    // ==================== STATUS DE CONEXÃO ====================
-    const connectionStatus = document.getElementById('connectionStatus');
-    function updateConnectionStatus() {
-      if (navigator.onLine) {
-        connectionStatus.className = 'online-badge';
-        connectionStatus.innerHTML = '🟢 Online';
-      } else {
-        connectionStatus.className = 'offline-badge';
-        connectionStatus.innerHTML = '🔴 Offline';
-      }
-    }
-    window.addEventListener('online', updateConnectionStatus);
-    window.addEventListener('offline', updateConnectionStatus);
-    updateConnectionStatus();
-
-    // ==================== SERVICE WORKER REGISTRATION ====================
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/TENDEX/sw.js')
-        .then(reg => console.log('Service Worker registrado', reg))
-        .catch(err => console.error('Falha ao registrar Service Worker', err));
-      
-      navigator.serviceWorker.addEventListener('message', async (event) => {
-        if (event.data && event.data.type === 'SYNC_TRIGGERED') {
-          console.log('Sync triggered pelo Service Worker');
-          await processarPendentes();
-        }
-      });
-    }
-
-    async function processarPendentes() {
-      const pendentes = await getPendingInspections();
-      if (pendentes.length === 0) return;
-      
-      console.log(`📤 Enviando ${pendentes.length} inspeções pendentes...`);
-      
-      for (const item of pendentes) {
-        try {
-          const pdfBlob = base64ToBlob(item.pdfBase64, 'application/pdf');
-          const pdfFile = new File([pdfBlob], `checklist_${item.monthName}_${Date.now()}.pdf`, { type: 'application/pdf' });
-          
-          let fotoFile = null;
-          if (item.fotoBase64) {
-            const fotoBlob = base64ToBlob(item.fotoBase64, 'image/jpeg');
-            fotoFile = new File([fotoBlob], `foto_${Date.now()}.jpg`, { type: 'image/jpeg' });
-          }
-          
-          await addFileToItem(item.itemId, item.category, pdfFile, item.formData.data_inspecao);
-          await removerPending(item.id);
-          console.log(`✅ Inspeção ${item.id} enviada com sucesso`);
-        } catch (error) {
-          console.error(`❌ Erro ao enviar inspeção ${item.id}:`, error);
-        }
-      }
-      
-      if (pendentes.length > 0) {
-        await refreshData();
-      }
-    }
-
-    // ==================== CONFIGURAÇÃO SUPABASE ====================
     let currentUser = null;
     try {
       const savedUser = localStorage.getItem('tendex_current_user');
@@ -455,6 +268,7 @@
     if (currentUser && currentUser.username) userInfoDisplay.innerHTML = ` ${currentUser.username} `;
     else { userInfoDisplay.innerHTML = `👤 Não logado`; window.location.href = 'index.html'; }
 
+    // Logout modal
     const logoutModal = document.getElementById('logoutModal');
     const closeLogoutModalBtn = document.getElementById('closeLogoutModalBtn');
     const cancelLogoutBtn = document.getElementById('cancelLogoutBtn');
@@ -501,7 +315,7 @@
     let currentFormItemId = null, currentFormCategory = null, currentFormMonthName = null, currentItemInfo = null;
     let currentItems = [];
     let reactivatingItemId = null;
-    window.currentDetailItem = null;
+    let currentDetailItem = null;
 
     function getStoragePathFromUrl(url) {
       const regex = /\/storage\/v1\/object\/public\/pdfs\/(.+)$/;
@@ -518,41 +332,13 @@
     }
 
     async function getAllItemsWithFiles() {
-      let items = [];
-      let files = [];
-      
-      if (navigator.onLine) {
-        try {
-          const { data: itemsData, error: itemsError } = await supabase.from('items').select('*').order('id', { ascending: true });
-          if (itemsError) throw itemsError;
-          items = itemsData;
-          const { data: filesData, error: filesError } = await supabase.from('files').select('*');
-          if (filesError) throw filesError;
-          files = filesData;
-          await salvarItemsLocal(items);
-        } catch (error) {
-          console.warn('Erro ao buscar online, usando cache local:', error);
-          items = await carregarItemsLocal();
-        }
-      } else {
-        items = await carregarItemsLocal();
-        if (items.length === 0) {
-          console.warn('Nenhum item em cache local. Conecte-se à internet para carregar os dados.');
-          return [];
-        }
-      }
-      
+      const { data: items, error: itemsError } = await supabase.from('items').select('*').order('id', { ascending: true });
+      if (itemsError) throw itemsError;
+      const { data: files, error: filesError } = await supabase.from('files').select('*');
+      if (filesError) throw filesError;
       const filesByItem = {};
       files.forEach(file => { if (!filesByItem[file.item_id]) filesByItem[file.item_id] = []; filesByItem[file.item_id].push(file); });
-      return items.map(item => ({ 
-        id: item.id, 
-        name: item.name, 
-        sub_localizacao: item.sub_localizacao || '', 
-        tamanho: item.tamanho || '', 
-        code: item.code, 
-        status: item.status || 'active', 
-        files: filesByItem[item.id] || [] 
-      }));
+      return items.map(item => ({ id: item.id, name: item.name, sub_localizacao: item.sub_localizacao || '', tamanho: item.tamanho || '', code: item.code, status: item.status || 'active', files: filesByItem[item.id] || [] }));
     }
 
     async function addFileToItem(itemId, category, file, inspecaoData = null) {
@@ -589,23 +375,6 @@
     }
 
     async function saveItemComplete(itemId, name, sub_localizacao, tamanho, code, filesToProcess) {
-      if (!navigator.onLine) {
-        const newId = itemId || Date.now();
-        const newItem = { id: newId, name, sub_localizacao, tamanho, code, status: 'active', files: [] };
-        const items = await carregarItemsLocal();
-        if (itemId) {
-          const index = items.findIndex(i => i.id === itemId);
-          if (index !== -1) items[index] = newItem;
-          else items.push(newItem);
-        } else {
-          items.push(newItem);
-        }
-        await salvarItemsLocal(items);
-        await refreshData();
-        alert('⚠️ Você está offline. O item foi salvo localmente e será sincronizado quando a internet voltar.');
-        return newId;
-      }
-
       const { data: existing, error: dupError } = await supabase.from('items').select('id').eq('code', code).maybeSingle();
       if (dupError) throw dupError;
       if (existing && existing.id !== itemId) throw new Error(`O código "${code}" já está em uso.`);
@@ -637,7 +406,6 @@
           await supabase.from('files').insert({ item_id: itemIdFinal, category: fileInfo.category, file_name: fileInfo.fileName, file_url: fileInfo.url });
         }
       }
-      await salvarItemsLocal(await supabase.from('items').select('*'));
       return itemIdFinal;
     }
 
@@ -663,6 +431,7 @@
             await saveHistory(itemId, { name: item.name, sub_localizacao: item.sub_localizacao, tamanho: item.tamanho, code: item.code });
             await supabase.from('items').update({ status: 'inactive' }).eq('id', itemId);
             await refreshData();
+            // Recarrega o modal de detalhes com o novo status
             const detailModalElem = document.getElementById('detailModal');
             if (detailModalElem && detailModalElem.style.display === 'flex') {
               await openDetailModal(itemId);
@@ -671,6 +440,7 @@
             fullscreenLoader.classList.remove('active');
           }
         } else {
+          // Reverter toggle visual
           const toggle = document.getElementById('statusToggle');
           if (toggle) toggle.checked = true;
           const statusTextSpan = document.getElementById('statusText');
@@ -702,6 +472,7 @@
           status: 'active'
         }).eq('id', reactivatingItemId);
         document.getElementById('reactivateModal').style.display = 'none';
+        // Recarrega o modal de detalhes
         const detailModalElem = document.getElementById('detailModal');
         if (detailModalElem && detailModalElem.style.display === 'flex') {
           await openDetailModal(reactivatingItemId);
@@ -712,73 +483,49 @@
       }
     }
 
-    async function gerarPDFBlob(formData, itemInfo, fotoFile) {
-      if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
-      const { PDFDocument } = window.PDFLib;
-      const modelBytes = await fetch(MODELO_PDF_URL).then(res => res.arrayBuffer());
-      const pdfDoc = await PDFDocument.load(modelBytes);
-      const form = pdfDoc.getForm();
-      const camposCabecalho = [
-        { nome: "unidade", valor: formData.unidade || "" },
-        { nome: "localidade", valor: formData.localidade || "" },
-        { nome: "nome", valor: formData.resp_nome || "" },
-        { nome: "matrcula", valor: formData.resp_matricula || "" },
-        { nome: "data", valor: formData.data_inspecao || "" },
-        { nome: "empresa", valor: formData.empresa || "" }
-      ];
-      for (const campo of camposCabecalho) try { form.getTextField(campo.nome).setText(campo.valor); } catch(e) {}
-      for (let i=1; i<=25; i++) {
-        const resposta = formData[`resp_${i-1}`] || "Não respondido";
-        try { form.getTextField(`${i}`).setText(resposta); } catch(e) {}
-      }
-      await adicionarInfoItemEAssinatura(pdfDoc, itemInfo.code, itemInfo.tamanho);
-      if (fotoFile) {
-        const fotoBytes = await fotoFile.arrayBuffer();
-        let fotoImage;
-        try { fotoImage = await pdfDoc.embedPng(fotoBytes); } catch { fotoImage = await pdfDoc.embedJpg(fotoBytes); }
-        if (fotoImage) {
-          const fotoMaxWidth = 300, fotoMaxHeight = 200;
-          const scale = Math.min(fotoMaxWidth / fotoImage.width, fotoMaxHeight / fotoImage.height);
-          const finalW = fotoImage.width * scale, finalH = fotoImage.height * scale;
-          const page = pdfDoc.getPages()[0];
-          const { width, height } = page.getSize();
-          const fotoX = 30;
-          const fotoY = 30;
-          page.drawImage(fotoImage, { x: fotoX, y: fotoY, width: finalW, height: finalH });
+    async function adicionarInfoItemEAssinatura(pdfDoc, itemCode, itemTamanho) {
+      try {
+        const pages = pdfDoc.getPages();
+        if (pages.length === 0) return pdfDoc;
+        const pagina = pages[0];
+        const { width, height } = pagina.getSize();
+        const { StandardFonts, rgb } = window.PDFLib;
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        const posX = width - 210;
+        let posY = 130;
+        pagina.drawText(`ID / TAG: ${itemCode}`, { x: posX, y: posY, size: 10, font: boldFont, color: rgb(0,0,0) });
+        posY -= 18;
+        pagina.drawText(`TAMANHO: ${itemTamanho || 'Não informado'}`, { x: posX, y: posY, size: 10, font: boldFont, color: rgb(0,0,0) });
+        posY -= 25;
+        pagina.drawLine({ start: { x: posX-10, y: posY+8 }, end: { x: width-30, y: posY+8 }, thickness: 1, color: rgb(0.5,0.5,0.5) });
+        pagina.drawText("Assinatura do Responsável", { x: posX-10, y: posY-5, size: 8, font: font, color: rgb(0.5,0.5,0.5) });
+        if (currentUser && currentUser.username) {
+          const nomeUsuario = currentUser.username.toLowerCase();
+          const assinaturaUrl = `https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/${nomeUsuario}.png`;
+          try {
+            const response = await fetch(assinaturaUrl);
+            if (response.ok) {
+              const imageBytes = await response.arrayBuffer();
+              let imagem;
+              try { imagem = await pdfDoc.embedPng(imageBytes); } catch(e) { try { imagem = await pdfDoc.embedJpg(imageBytes); } catch(e2) {} }
+              if (imagem) {
+                const areaMaxWidth = 180, areaMaxHeight = 80;
+                const scale = Math.min(areaMaxWidth / imagem.width, areaMaxHeight / imagem.height);
+                const finalW = imagem.width * scale, finalH = imagem.height * scale;
+                const imgX = width - finalW - 30, imgY = posY - finalH - 10;
+                pagina.drawImage(imagem, { x: imgX, y: imgY, width: finalW, height: finalH });
+              }
+            }
+          } catch(err) { console.warn(err); }
         }
-      }
-      const pdfBytes = await pdfDoc.save();
-      return new Blob([pdfBytes], { type: 'application/pdf' });
+        return pdfDoc;
+      } catch(err) { console.warn(err); return pdfDoc; }
     }
 
-    async function generateAndAttachPdf(itemId, category, monthName, formData, itemInfo, fotoFile) {
-      if (!navigator.onLine) {
-        try {
-          fullscreenLoader.classList.add('active');
-          const pdfBlob = await gerarPDFBlob(formData, itemInfo, fotoFile);
-          const fotoBase64 = fotoFile ? await blobToBase64(fotoFile) : null;
-          const pdfBase64 = await blobToBase64(pdfBlob);
-          
-          const pendingData = {
-            type: 'inspecao',
-            itemId, category, monthName,
-            formData, itemInfo,
-            pdfBase64, fotoBase64,
-            timestamp: new Date().toISOString()
-          };
-          await salvarPending(pendingData);
-          await registrarSync();
-          fullscreenLoader.classList.remove('active');
-          alert('⚠️ Você está offline. O PDF foi salvo localmente e será enviado automaticamente quando a internet voltar.');
-          return;
-        } catch (error) {
-          fullscreenLoader.classList.remove('active');
-          console.error('Erro ao salvar offline:', error);
-          alert('Erro ao salvar inspeção localmente. Tente novamente.');
-          return;
-        }
-      }
+    const MODELO_PDF_URL = "https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/pdfs/modelo_checklist_com_campos%20(3).pdf";
 
+    async function generateAndAttachPdf(itemId, category, monthName, formData, itemInfo, fotoFile) {
       try {
         if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
         const { PDFDocument } = window.PDFLib;
@@ -831,48 +578,7 @@
       } catch(err) { console.error(err); alert("Erro ao gerar PDF: " + err.message); }
     }
 
-    async function adicionarInfoItemEAssinatura(pdfDoc, itemCode, itemTamanho) {
-      try {
-        const pages = pdfDoc.getPages();
-        if (pages.length === 0) return pdfDoc;
-        const pagina = pages[0];
-        const { width, height } = pagina.getSize();
-        const { StandardFonts, rgb } = window.PDFLib;
-        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        const posX = width - 210;
-        let posY = 130;
-        pagina.drawText(`ID / TAG: ${itemCode}`, { x: posX, y: posY, size: 10, font: boldFont, color: rgb(0,0,0) });
-        posY -= 18;
-        pagina.drawText(`TAMANHO: ${itemTamanho || 'Não informado'}`, { x: posX, y: posY, size: 10, font: boldFont, color: rgb(0,0,0) });
-        posY -= 25;
-        pagina.drawLine({ start: { x: posX-10, y: posY+8 }, end: { x: width-30, y: posY+8 }, thickness: 1, color: rgb(0.5,0.5,0.5) });
-        pagina.drawText("Assinatura do Responsável", { x: posX-10, y: posY-5, size: 8, font: font, color: rgb(0.5,0.5,0.5) });
-        if (currentUser && currentUser.username) {
-          const nomeUsuario = currentUser.username.toLowerCase();
-          const assinaturaUrl = `https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/${nomeUsuario}.png`;
-          try {
-            const response = await fetch(assinaturaUrl);
-            if (response.ok) {
-              const imageBytes = await response.arrayBuffer();
-              let imagem;
-              try { imagem = await pdfDoc.embedPng(imageBytes); } catch(e) { try { imagem = await pdfDoc.embedJpg(imageBytes); } catch(e2) {} }
-              if (imagem) {
-                const areaMaxWidth = 180, areaMaxHeight = 80;
-                const scale = Math.min(areaMaxWidth / imagem.width, areaMaxHeight / imagem.height);
-                const finalW = imagem.width * scale, finalH = imagem.height * scale;
-                const imgX = width - finalW - 30, imgY = posY - finalH - 10;
-                pagina.drawImage(imagem, { x: imgX, y: imgY, width: finalW, height: finalH });
-              }
-            }
-          } catch(err) { console.warn(err); }
-        }
-        return pdfDoc;
-      } catch(err) { console.warn(err); return pdfDoc; }
-    }
-
-    const MODELO_PDF_URL = "https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/pdfs/modelo_checklist_com_campos%20(3).pdf";
-
+    // Função para upload manual de PDF (botão +)
     async function uploadManualPDF(itemId, category, monthName) {
       return new Promise((resolve, reject) => {
         const input = document.createElement('input');
@@ -883,7 +589,7 @@
           if (file && file.type === 'application/pdf') {
             fullscreenLoader.classList.add('active');
             try {
-              const inspecaoData = new Date().toISOString().split('T')[0];
+              const inspecaoData = new Date().toISOString().split('T')[0]; // data atual
               await addFileToItem(itemId, category, file, inspecaoData);
               await refreshData();
               await openDetailModal(itemId);
@@ -967,7 +673,7 @@
     async function openDetailModal(itemId) {
       const item = currentItems.find(i => i.id === itemId);
       if (!item) return;
-      window.currentDetailItem = item;
+      currentDetailItem = item;
       detailContent.innerHTML = '<div class="loading">Carregando...</div>';
       detailModalElem.style.display = 'flex';
       const freshItems = await getAllItemsWithFiles();
@@ -1021,6 +727,7 @@
         });
       }
       
+      // Botões de upload e formulário
       document.querySelectorAll('.upload-pdf-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           if (!isActive) {
@@ -1108,6 +815,7 @@
       }
     }
 
+    // Formulário de inspeção (mantido igual)
     const formModal = document.getElementById('formModal');
     const formFieldsContainer = document.getElementById('formFieldsContainer');
     const closeFormModalBtn = document.getElementById('closeFormModalBtn');
@@ -1177,6 +885,7 @@
     closeFormModalBtn.addEventListener('click', () => formModal.style.display = 'none');
     cancelFormBtn.addEventListener('click', () => formModal.style.display = 'none');
 
+    // Modal de reativação
     const reactivateModal = document.getElementById('reactivateModal');
     const closeReactivateModalBtn = document.getElementById('closeReactivateModalBtn');
     const cancelReactivateBtn = document.getElementById('cancelReactivateBtn');
@@ -1185,6 +894,7 @@
     cancelReactivateBtn.addEventListener('click', () => reactivateModal.style.display = 'none');
     confirmReactivateBtn.addEventListener('click', saveReactivate);
 
+    // CRIAÇÃO DE ITEM (mantido)
     const createModal = document.getElementById('createItemModal');
     const closeCreateBtn = document.getElementById('closeCreateModalBtn'), cancelCreateBtn = document.getElementById('cancelCreateBtn'), confirmCreateBtn = document.getElementById('confirmCreateBtn');
     const newItemName = document.getElementById('newItemName'), newSubLocalizacao = document.getElementById('newSubLocalizacao'), newTamanho = document.getElementById('newTamanho'), newItemCode = document.getElementById('newItemCode'), newMemorialFile = document.getElementById('newMemorialFile'), newMonthlyContainer = document.getElementById('newMonthlyFilesContainer'), createCodeError = document.getElementById('createCodeError');
@@ -1225,10 +935,7 @@
     document.getElementById('searchInput').addEventListener('input', (e) => renderCards(e.target.value));
     const monthContainer = document.getElementById('monthButtonsContainer');
     monthNames.forEach((month, idx) => { const btn = document.createElement('button'); btn.className = 'month-btn'; btn.textContent = month; btn.addEventListener('click', () => downloadMonthPDFs(monthKeys[idx], month)); monthContainer.appendChild(btn); });
-    window.addEventListener('DOMContentLoaded', async () => {
-      await initOfflineDB();
-      await refreshData();
-    });
+    window.addEventListener('DOMContentLoaded', async () => await refreshData());
   })();
 </script>
 </body>
