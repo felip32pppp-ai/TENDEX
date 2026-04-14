@@ -277,13 +277,29 @@
     const STORE_FILES = 'files_cache';
     const STORE_PENDING = 'pending_inspecoes';
 
+    let dbInitialized = false;
+    let dbInstance = null;
+
     function initOfflineDB() {
       return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME_OFFLINE, 5);
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve(request.result);
+        if (dbInstance && dbInitialized) {
+          resolve(dbInstance);
+          return;
+        }
+        const request = indexedDB.open(DB_NAME_OFFLINE, 6);
+        request.onerror = (event) => {
+          console.error('IndexedDB erro:', event);
+          reject(request.error);
+        };
+        request.onsuccess = (event) => {
+          dbInstance = request.result;
+          dbInitialized = true;
+          console.log('IndexedDB aberto com sucesso');
+          resolve(dbInstance);
+        };
         request.onupgradeneeded = (event) => {
           const db = event.target.result;
+          console.log('Criando stores...');
           if (!db.objectStoreNames.contains(STORE_ITEMS)) {
             db.createObjectStore(STORE_ITEMS, { keyPath: 'id' });
           }
@@ -355,26 +371,23 @@
 
     async function salvarPending(data) {
       try {
+        console.log('Salvando pending data:', data);
         const db = await initOfflineDB();
         return new Promise((resolve, reject) => {
           const tx = db.transaction(STORE_PENDING, 'readwrite');
           const store = tx.objectStore(STORE_PENDING);
           const request = store.add(data);
           request.onsuccess = () => {
-            console.log('✅ Dados salvos localmente com ID:', request.result);
+            console.log('✅ Pending salvo com ID:', request.result);
             resolve(request.result);
           };
           request.onerror = (event) => {
-            console.error('❌ Erro ao salvar no IndexedDB:', event);
+            console.error('Erro ao salvar pending:', event);
             reject(request.error);
-          };
-          tx.onerror = (event) => {
-            console.error('❌ Erro na transação:', event);
-            reject(tx.error);
           };
         });
       } catch (error) {
-        console.error('❌ Erro ao abrir o banco de dados:', error);
+        console.error('Erro no salvarPending:', error);
         throw error;
       }
     }
@@ -828,12 +841,18 @@
       if (!navigator.onLine) {
         try {
           fullscreenLoader.classList.add('active');
+          console.log('Modo offline - iniciando...');
           
           const pdfBlob = await gerarPDFBlob(formData, itemInfo, fotoFile);
+          console.log('PDF gerado, tamanho:', pdfBlob.size);
+          
           const pdfBase64 = await blobToBase64(pdfBlob);
+          console.log('PDF convertido para base64');
+          
           let fotoBase64 = null;
           if (fotoFile) {
             fotoBase64 = await blobToBase64(fotoFile);
+            console.log('Foto convertida para base64');
           }
           
           const pendingData = {
@@ -861,7 +880,7 @@
         } catch (error) {
           fullscreenLoader.classList.remove('active');
           console.error('Erro detalhado ao salvar offline:', error);
-          alert('Erro ao salvar inspeção localmente: ' + error.message);
+          alert('Erro ao salvar inspeção localmente: ' + (error.message || 'Verifique o console'));
           return;
         }
       }
