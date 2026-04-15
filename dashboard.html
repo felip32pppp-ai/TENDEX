@@ -277,70 +277,29 @@
     const STORE_FILES = 'files_cache';
     const STORE_PENDING_ITEMS = 'pending_items';
     const STORE_PENDING_INSPECTIONS = 'pending_inspections';
+    const STORE_MODELO_PDF = 'modelo_pdf';
 
     let dbInstance = null;
     let cachedModeloPDF = null;
 
-    // ==================== MODELO PDF CACHE ====================
+    // ==================== MODELO PDF URL ====================
     const MODELO_PDF_URL = "https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/pdfs/modelo_checklist_com_campos%20(3).pdf";
 
-    async function carregarModeloPDF() {
-      if (cachedModeloPDF) {
-        return cachedModeloPDF;
-      }
-      
-      // Tentar buscar do cache do navegador primeiro
-      if ('caches' in window) {
-        try {
-          const cache = await caches.open('tendex-modelos');
-          const cachedResponse = await cache.match(MODELO_PDF_URL);
-          if (cachedResponse && cachedResponse.ok) {
-            const blob = await cachedResponse.blob();
-            cachedModeloPDF = await blob.arrayBuffer();
-            console.log('✅ Modelo PDF carregado do cache');
-            return cachedModeloPDF;
-          }
-        } catch(e) { console.warn('Erro ao ler cache:', e); }
-      }
-      
-      // Se não estiver em cache, buscar da rede
-      try {
-        const response = await fetch(MODELO_PDF_URL);
-        if (!response.ok) throw new Error('Falha ao baixar modelo');
-        const buffer = await response.arrayBuffer();
-        cachedModeloPDF = buffer;
-        
-        // Salvar no cache para uso futuro
-        if ('caches' in window) {
-          try {
-            const cache = await caches.open('tendex-modelos');
-            await cache.put(MODELO_PDF_URL, new Response(buffer, {
-              headers: { 'Content-Type': 'application/pdf' }
-            }));
-            console.log('✅ Modelo PDF salvo no cache');
-          } catch(e) { console.warn('Erro ao salvar cache:', e); }
-        }
-        return buffer;
-      } catch (error) {
-        console.error('Erro ao carregar modelo PDF:', error);
-        throw error;
-      }
-    }
-
+    // ==================== INICIALIZAR INDEXEDDB ====================
     function initOfflineDB() {
       return new Promise((resolve, reject) => {
         if (dbInstance) {
           resolve(dbInstance);
           return;
         }
-        const request = indexedDB.open(DB_NAME_OFFLINE, 9);
+        const request = indexedDB.open(DB_NAME_OFFLINE, 10);
         request.onerror = (event) => {
           console.error('IndexedDB erro:', event);
           reject(request.error);
         };
         request.onsuccess = (event) => {
           dbInstance = request.result;
-          console.log('IndexedDB aberto com sucesso - versão 9');
+          console.log('IndexedDB aberto com sucesso - versão 10');
           resolve(dbInstance);
         };
         request.onupgradeneeded = (event) => {
@@ -358,11 +317,65 @@
           if (!db.objectStoreNames.contains(STORE_PENDING_INSPECTIONS)) {
             db.createObjectStore(STORE_PENDING_INSPECTIONS, { keyPath: 'id', autoIncrement: true });
           }
+          if (!db.objectStoreNames.contains(STORE_MODELO_PDF)) {
+            db.createObjectStore(STORE_MODELO_PDF, { keyPath: 'id' });
+          }
         };
       });
     }
 
-    // ==================== LIMPAR DADOS ANTIGOS ====================
+    // ==================== CARREGAR MODELO PDF (com cache no IndexedDB) ====================
+    async function carregarModeloPDF() {
+      if (cachedModeloPDF) {
+        return cachedModeloPDF;
+      }
+      
+      // Tentar buscar do IndexedDB primeiro
+      try {
+        const db = await initOfflineDB();
+        const tx = db.transaction(STORE_MODELO_PDF, 'readonly');
+        const store = tx.objectStore(STORE_MODELO_PDF);
+        const result = await new Promise((resolve, reject) => {
+          const request = store.get('modelo');
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        if (result && result.data) {
+          cachedModeloPDF = result.data;
+          console.log('✅ Modelo PDF carregado do IndexedDB, tamanho:', cachedModeloPDF.byteLength);
+          return cachedModeloPDF;
+        }
+      } catch(e) { console.warn('Erro ao ler IndexedDB:', e); }
+      
+      // Se não estiver em cache, buscar da rede (apenas quando online)
+      if (!navigator.onLine) {
+        throw new Error('Modelo PDF não está em cache e você está offline');
+      }
+      
+      try {
+        console.log('📥 Baixando modelo PDF do Supabase...');
+        const response = await fetch(MODELO_PDF_URL);
+        if (!response.ok) throw new Error('Falha ao baixar modelo');
+        const buffer = await response.arrayBuffer();
+        cachedModeloPDF = buffer;
+        
+        // Salvar no IndexedDB
+        try {
+          const db = await initOfflineDB();
+          const tx = db.transaction(STORE_MODELO_PDF, 'readwrite');
+          const store = tx.objectStore(STORE_MODELO_PDF);
+          store.put({ id: 'modelo', data: buffer });
+          console.log('✅ Modelo PDF salvo no IndexedDB, tamanho:', buffer.byteLength);
+        } catch(e) { console.warn('Erro ao salvar no IndexedDB:', e); }
+        
+        return buffer;
+      } catch (error) {
+        console.error('Erro ao carregar modelo PDF:', error);
+        throw error;
+      }
+    }
+
+    // ==================== LIMPAR DADOS PENDENTES ====================
     async function limparDadosSincronizados() {
       try {
         const db = await initOfflineDB();
@@ -675,13 +688,6 @@
     window.addEventListener('offline', updateConnectionStatus);
     updateConnectionStatus();
 
-    // ==================== SERVICE WORKER REGISTRATION ====================
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/TENDEX/sw.js')
-        .then(reg => console.log('Service Worker registrado', reg))
-        .catch(err => console.error('Falha ao registrar Service Worker', err));
-    }
-
     // ==================== CONFIGURAÇÃO SUPABASE ====================
     let currentUser = null;
     try {
@@ -991,7 +997,7 @@
       if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
       const { PDFDocument } = window.PDFLib;
       
-      // Usar o modelo em cache
+      // Usar o modelo em cache (IndexedDB)
       const modelBytes = await carregarModeloPDF();
       const pdfDoc = await PDFDocument.load(modelBytes);
       const form = pdfDoc.getForm();
@@ -1515,8 +1521,12 @@
     const monthContainer = document.getElementById('monthButtonsContainer');
     monthNames.forEach((month, idx) => { const btn = document.createElement('button'); btn.className = 'month-btn'; btn.textContent = month; btn.addEventListener('click', () => downloadMonthPDFs(monthKeys[idx], month)); monthContainer.appendChild(btn); });
     
-    // Pré-carregar o modelo PDF quando estiver online
-    async function preCarregarModeloPDF() {
+    // ==================== INICIALIZAÇÃO ====================
+    window.addEventListener('DOMContentLoaded', async () => {
+      await initOfflineDB();
+      await limparDadosSincronizados();
+      
+      // Pré-carregar o modelo PDF se estiver online
       if (navigator.onLine) {
         try {
           console.log('📥 Pré-carregando modelo PDF para uso offline...');
@@ -1526,12 +1536,7 @@
           console.error('❌ Erro ao pré-carregar modelo:', error);
         }
       }
-    }
-    
-    window.addEventListener('DOMContentLoaded', async () => {
-      await initOfflineDB();
-      await limparDadosSincronizados();
-      await preCarregarModeloPDF();
+      
       await refreshData();
       await sincronizarTudo();
     });
@@ -1540,6 +1545,13 @@
     window.addEventListener('online', async () => {
       console.log('Conexão detectada, aguardando estabilização...');
       await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Pré-carregar modelo PDF quando voltar online
+      if (navigator.onLine) {
+        try {
+          await carregarModeloPDF();
+        } catch(e) {}
+      }
       
       if (await testarConexao() && !syncScheduled) {
         syncScheduled = true;
