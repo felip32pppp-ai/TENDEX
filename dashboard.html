@@ -185,7 +185,7 @@
 <div class="dashboard-header">
   <div class="header-left">
     <img src="https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/Tenda_logo2.png" alt="Logo TENDEX" class="logo" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%233b82f6%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z%22%3E%3C/path%3E%3Cpolyline points=%229 22 9 12 15 12 15 22%22%3E%3C/polyline%3E%3C/svg%3E';">
-    <h1></h1>
+    <h1>TENDEX - Sistema de Inspeção</h1>
   </div>
   <div style="display: flex; gap: 1rem; align-items: center;">
     <div class="user-info" id="userInfoDisplay">👤 Carregando...</div>
@@ -266,6 +266,18 @@
 
 <script>
   (function() {
+    // Desabilitar spellcheck globalmente para evitar erros CORS
+    document.addEventListener('DOMContentLoaded', () => {
+      const disableSpellCheck = () => {
+        document.querySelectorAll('input, textarea, [contenteditable="true"]').forEach(el => {
+          el.setAttribute('spellcheck', 'false');
+        });
+      };
+      disableSpellCheck();
+      const observer = new MutationObserver(disableSpellCheck);
+      observer.observe(document.body, { childList: true, subtree: true });
+    });
+
     const SUPABASE_URL = "https://jklcvyuxwxgsfczrfaco.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_oCE8y5qaLovVj0BU-rANHA__Zmy3XVl";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -292,14 +304,14 @@
           resolve(dbInstance);
           return;
         }
-        const request = indexedDB.open(DB_NAME_OFFLINE, 10);
+        const request = indexedDB.open(DB_NAME_OFFLINE, 11);
         request.onerror = (event) => {
           console.error('IndexedDB erro:', event);
           reject(request.error);
         };
         request.onsuccess = (event) => {
           dbInstance = request.result;
-          console.log('IndexedDB aberto com sucesso - versão 10');
+          console.log('IndexedDB aberto com sucesso - versão 11');
           resolve(dbInstance);
         };
         request.onupgradeneeded = (event) => {
@@ -324,7 +336,7 @@
       });
     }
 
-    // ==================== CARREGAR MODELO PDF (com cache no IndexedDB) ====================
+    // ==================== CARREGAR MODELO PDF ====================
     async function carregarModeloPDF() {
       if (cachedModeloPDF) {
         return cachedModeloPDF;
@@ -534,11 +546,10 @@
       });
     }
 
-    // ==================== TESTE DE CONEXÃO (CORRIGIDO) ====================
+    // ==================== TESTE DE CONEXÃO ====================
     async function testarConexao() {
       if (!navigator.onLine) return false;
       try {
-        // Usar um endpoint confiável que aceita requisições simples
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         await fetch('https://www.google.com', { 
@@ -549,7 +560,6 @@
         clearTimeout(timeoutId);
         return true;
       } catch (error) {
-        // Em modo 'no-cors', se chegou aqui, consideramos online
         return navigator.onLine;
       }
     }
@@ -635,7 +645,8 @@
         return;
       }
       
-      fullscreenLoader.classList.add('active');
+      const loader = document.getElementById('fullscreenLoader');
+      loader.classList.add('active');
       let mensagens = [];
       
       try {
@@ -652,7 +663,7 @@
       } catch (error) {
         console.error('Erro na sincronização:', error);
       } finally {
-        fullscreenLoader.classList.remove('active');
+        loader.classList.remove('active');
       }
     }
 
@@ -690,7 +701,7 @@
     window.addEventListener('offline', updateConnectionStatus);
     updateConnectionStatus();
 
-    // ==================== SERVICE WORKER (opcional, não interfere) ====================
+    // ==================== SERVICE WORKER (CORRIGIDO) ====================
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/TENDEX/sw.js')
         .then(reg => console.log('Service Worker registrado', reg))
@@ -705,48 +716,56 @@
     } catch(e) { console.warn(e); }
     
     const userInfoDisplay = document.getElementById('userInfoDisplay');
-    if (currentUser && currentUser.username) userInfoDisplay.innerHTML = ` ${currentUser.username} `;
-    else { userInfoDisplay.innerHTML = `👤 Não logado`; window.location.href = 'index.html'; }
+    if (currentUser && currentUser.username) userInfoDisplay.innerHTML = `👤 ${currentUser.username}`;
+    else { 
+      userInfoDisplay.innerHTML = `👤 Não logado`; 
+      window.location.href = 'index.html';
+      return;
+    }
 
+    // Modal de logout
     const logoutModal = document.getElementById('logoutModal');
     const closeLogoutModalBtn = document.getElementById('closeLogoutModalBtn');
     const cancelLogoutBtn = document.getElementById('cancelLogoutBtn');
     const confirmLogoutBtn = document.getElementById('confirmLogoutBtn');
+    
     userInfoDisplay.addEventListener('click', () => { logoutModal.style.display = 'flex'; });
     function closeLogoutModal() { logoutModal.style.display = 'none'; }
     closeLogoutModalBtn.addEventListener('click', closeLogoutModal);
     cancelLogoutBtn.addEventListener('click', closeLogoutModal);
-    confirmLogoutBtn.addEventListener('click', () => { localStorage.removeItem('tendex_current_user'); window.location.href = 'index.html'; });
+    confirmLogoutBtn.addEventListener('click', () => { 
+      localStorage.removeItem('tendex_current_user'); 
+      window.location.href = 'index.html'; 
+    });
     logoutModal.addEventListener('click', (e) => { if (e.target === logoutModal) closeLogoutModal(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && logoutModal.style.display === 'flex') closeLogoutModal(); });
 
     const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
     const monthKeys = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
     const checklistPerguntas = [
-      "[IMPEDITIVO] [Projeto] As tendas/ Galpões lonados possuem Projeto Estrutural e Anotação de Responsabilidade Técnica executado por um Engenheiro habilitado pelo CREA e está aderente? (caso as tendas/galpões lonados não possua projeto, considerar impeditivo)",
-      "[Projeto] As tendas/ Galpões lonados utilizados como abrigo seguro possuem Projeto de SPDA e Anotação de Responsabilidade Técnica executado por um Engenheiro habilitado pelo CREA e está vigente? (ver NBR-ABNT 5419). (referência, tendas >25 m²)",
+      "[IMPEDITIVO] [Projeto] As tendas/ Galpões lonados possuem Projeto Estrutural e Anotação de Responsabilidade Técnica executado por um Engenheiro habilitado pelo CREA e está aderente?",
+      "[Projeto] As tendas/ Galpões lonados utilizados como abrigo seguro possuem Projeto de SPDA e Anotação de Responsabilidade Técnica executado por um Engenheiro habilitado pelo CREA e está vigente?",
       "[Projeto] As tendas/ Galpões lonados utilizados para cobrir estruturas de canteiro, possuem aterramento conforme projeto do canteiro de obras?",
       "[Projeto] O manual de instrução/ montagem do fabricante estão disponíveis na frente de serviço?",
       "[Projeto] As tendas/ Galpões lonados, possuem a placa de liberação com data e responsável?",
-      "[Projeto] As tendas/ Galpões lonados possuem plano de inspeção e o mesmo está aderente, conforme projeto? (referência, tendas >25 m²)",
-      "[Projeto] O formulário de inspeção anterior está disponível na frente de serviço? (referência, tendas >25 m²)",
-      "[Inspeção] A aranha (estrutura de sustentação da lona), estão em bom estado de conservação, parafusadas com parafuso autotravante, tanto na parte superior e inferior do teto? conforme inspeção visual? não apresentando corrosão e/ou deformação?",
+      "[Projeto] As tendas/ Galpões lonados possuem plano de inspeção e o mesmo está aderente, conforme projeto?",
+      "[Projeto] O formulário de inspeção anterior está disponível na frente de serviço?",
+      "[Inspeção] A aranha (estrutura de sustentação da lona), estão em bom estado de conservação, parafusadas com parafuso autotravante, tanto na parte superior e inferior do teto?",
       "[Inspeção] As Cintas Poliéster estão tensionada e não apresentam deformação, fissuras ou cortes, conforme projeto?",
       "[Inspeção] As colunas de escoramento e colunas de sustentação (pilares) estão alinhadas perpendicular (90°) as vigas e não apresentam corrosão e/ou deformação?",
       "[Inspeção] As colunas de sustentação estão encaixadas e parafusadas às vigas e possuem mão francesa?",
       "[Inspeção] As mãos francesas possuem parafusos autotravantes de encaixe nas vigas e pilares?",
-      "[Inspeção] As tendas/ Galpões lonados não estão montadas próximo à escavação, taludes ou pilhas de materiais onde exista risco de ser atingido em caso de deslizamento ou ruptura? (distância a ser definida conforme projeto).",
+      "[Inspeção] As tendas/ Galpões lonados não estão montadas próximo à escavação, taludes ou pilhas de materiais onde exista risco de ser atingido em caso de deslizamento ou ruptura?",
       "[Inspeção] As travas (parafusos cabeça sextavado, porcas sextavada, pino em L, arruela lisa, chumbadores, porca e contraporca, ou porca autotravante) apresentam sinais de corrosão ou folgas?",
       "[Inspeção] As vigas (calha treliçada), estão alinhadas perpendicular (90°) aos pilares e não apresentam corrosão e/ou deformação?",
       "[Inspeção] Os cabos de aço estão tensionados e possuem clips, não possuem fissuras ou corrosão, e possuem sapatilhas para fixação, conforme projeto?",
-      "[Inspeção] Todas as colunas de sustentação (pilares) possuem estaiamento com Cinta Poliéster e/ou cabo de aço conforme projeto e catraca vinculada a um Chumbador - Finca / Parabole? Ângulo mínimo de 60° entre o estaiamento e o pilar.",
+      "[Inspeção] Todas as colunas de sustentação (pilares) possuem estaiamento com Cinta Poliéster e/ou cabo de aço conforme projeto e catraca vinculada a um Chumbador - Finca / Parabole?",
       "[Inspeção] Todas as colunas de sustentação (pilares) possuem no mínimo 02 Chumbadores - Finca com ponto de solda na base / Parabole por pilar?",
       "[Inspeção] A lona / Sombrite do fechamento lateral, esta em bom estado de conservação, não apresenta rasgos, furos, esta amarrada e esticada em todos os pontos de fixação conforme projeto?",
       "[Inspeção] A lona / Sombrite do teto, esta em bom estado de conservação, não apresenta rasgos, furos, esta esticada e amarrada às vigas em todos os pontos de fixação, conforme projeto?",
-      "[Inspeção] As calhas de água de chuva e o interior dos pilares vazados estão totalmente desobstruídos? (quando aplicável no projeto).",
+      "[Inspeção] As calhas de água de chuva e o interior dos pilares vazados estão totalmente desobstruídos?",
       "[Inspeção] As tendas/ Galpões lonados estão montadas a uma distância segura de rede elétrica, equipamento ou árvores que ofereça risco de queda de peças e materiais?",
-      "[Inspeção] As tendas/galpões lonados utilizadas para ocupação de pessoas possuem sinalização de saída de emergência e alarme de emergência, conforme projeto? (adotar o item conforme indicação do projeto)",
+      "[Inspeção] As tendas/galpões lonados utilizadas para ocupação de pessoas possuem sinalização de saída de emergência e alarme de emergência, conforme projeto?",
       "[Inspeção] O sistema de iluminação (se aplicável), estão instalados corretamente?",
       "[Inspeção] A lona de cobertura está sem nenhuma deformação ocasionada por acumulo de água, folhas, minério, etc.?"
     ];
@@ -948,7 +967,8 @@
       if (!item) return;
       if (newStatus === 'inactive') {
         if (confirm('Inativar este item? Os dados atuais serão salvos no histórico.')) {
-          fullscreenLoader.classList.add('active');
+          const loader = document.getElementById('fullscreenLoader');
+          loader.classList.add('active');
           try {
             await saveHistory(itemId, { name: item.name, sub_localizacao: item.sub_localizacao, tamanho: item.tamanho, code: item.code });
             await supabase.from('items').update({ status: 'inactive' }).eq('id', itemId);
@@ -958,7 +978,7 @@
               await openDetailModal(itemId);
             }
           } finally {
-            fullscreenLoader.classList.remove('active');
+            loader.classList.remove('active');
           }
         } else {
           const toggle = document.getElementById('statusToggle');
@@ -982,7 +1002,8 @@
       if (!newName) { alert("Localização é obrigatória."); return; }
       const item = currentItems.find(i => i.id === reactivatingItemId);
       if (!item) return;
-      fullscreenLoader.classList.add('active');
+      const loader = document.getElementById('fullscreenLoader');
+      loader.classList.add('active');
       try {
         await saveHistory(reactivatingItemId, { name: item.name, sub_localizacao: item.sub_localizacao, tamanho: item.tamanho, code: item.code });
         await supabase.from('items').update({
@@ -998,7 +1019,7 @@
         }
         await refreshData();
       } finally {
-        fullscreenLoader.classList.remove('active');
+        loader.classList.remove('active');
       }
     }
 
@@ -1006,7 +1027,6 @@
       if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
       const { PDFDocument } = window.PDFLib;
       
-      // Usar o modelo em cache (IndexedDB)
       const modelBytes = await carregarModeloPDF();
       const pdfDoc = await PDFDocument.load(modelBytes);
       const form = pdfDoc.getForm();
@@ -1033,7 +1053,6 @@
           const scale = Math.min(fotoMaxWidth / fotoImage.width, fotoMaxHeight / fotoImage.height);
           const finalW = fotoImage.width * scale, finalH = fotoImage.height * scale;
           const page = pdfDoc.getPages()[0];
-          const { width, height } = page.getSize();
           const fotoX = 30;
           const fotoY = 30;
           page.drawImage(fotoImage, { x: fotoX, y: fotoY, width: finalW, height: finalH });
@@ -1046,7 +1065,8 @@
     async function generateAndAttachPdf(itemId, category, monthName, formData, itemInfo, fotoFile) {
       if (!navigator.onLine || !(await testarConexao())) {
         try {
-          fullscreenLoader.classList.add('active');
+          const loader = document.getElementById('fullscreenLoader');
+          loader.classList.add('active');
           console.log('Modo offline - iniciando salvamento local...');
           
           const pdfBlob = await gerarPDFBlob(formData, itemInfo, fotoFile);
@@ -1074,11 +1094,12 @@
           
           await salvarInspecaoPending(pendingData);
           
-          fullscreenLoader.classList.remove('active');
+          loader.classList.remove('active');
           alert('⚠️ Você está offline. O PDF foi salvo localmente e será enviado automaticamente quando a internet voltar.');
           return;
         } catch (error) {
-          fullscreenLoader.classList.remove('active');
+          const loader = document.getElementById('fullscreenLoader');
+          loader.classList.remove('active');
           console.error('Erro detalhado ao salvar offline:', error);
           alert('Erro ao salvar inspeção localmente: ' + (error.message || 'Verifique o console'));
           return;
@@ -1114,7 +1135,6 @@
             const scale = Math.min(fotoMaxWidth / fotoImage.width, fotoMaxHeight / fotoImage.height);
             const finalW = fotoImage.width * scale, finalH = fotoImage.height * scale;
             const page = pdfDoc.getPages()[0];
-            const { width, height } = page.getSize();
             const fotoX = 30;
             const fotoY = 30;
             page.drawImage(fotoImage, { x: fotoX, y: fotoY, width: finalW, height: finalH });
@@ -1185,7 +1205,8 @@
         input.onchange = async (ev) => {
           const file = ev.target.files[0];
           if (file && file.type === 'application/pdf') {
-            fullscreenLoader.classList.add('active');
+            const loader = document.getElementById('fullscreenLoader');
+            loader.classList.add('active');
             try {
               const inspecaoData = new Date().toISOString().split('T')[0];
               await addFileToItem(itemId, category, file, inspecaoData);
@@ -1196,7 +1217,7 @@
               alert('Erro ao adicionar PDF: ' + err.message);
               reject(err);
             } finally {
-              fullscreenLoader.classList.remove('active');
+              loader.classList.remove('active');
             }
           } else if (file) {
             alert('Selecione um PDF.');
@@ -1235,10 +1256,10 @@
         return `
           <div class="item-card" data-id="${item.id}">
             <div>
-              <h3> ${escapeHtml(item.name)}</h3>
+              <h3>${escapeHtml(item.name)}</h3>
               <p>TAG: ${escapeHtml(item.code)}</p>
-              ${item.sub_localizacao ? `<p>${escapeHtml(item.sub_localizacao)}</p>` : ''}
-              ${item.tamanho ? `<p> ${escapeHtml(item.tamanho)}</p>` : ''}
+              ${item.sub_localizacao ? `<p>📍 ${escapeHtml(item.sub_localizacao)}</p>` : ''}
+              ${item.tamanho ? `<p>📏 ${escapeHtml(item.tamanho)}</p>` : ''}
               <div><span class="status-badge ${statusClass}">${statusText}</span></div>
               ${inspecaoMsg}
             </div>
@@ -1266,7 +1287,6 @@
     const closeDetailModalBtn = document.getElementById('closeDetailModalBtn');
     if (closeDetailModalBtn) closeDetailModalBtn.addEventListener('click', () => detailModalElem.style.display = 'none');
     detailModalElem.addEventListener('click', (e) => { if (e.target === detailModalElem) detailModalElem.style.display = 'none'; });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && detailModalElem.style.display === 'flex') detailModalElem.style.display = 'none'; });
 
     async function openDetailModal(itemId) {
       const item = currentItems.find(i => i.id === itemId);
@@ -1344,13 +1364,14 @@
             return;
           }
           if (confirm('Remover este PDF?')) {
-            fullscreenLoader.classList.add('active');
+            const loader = document.getElementById('fullscreenLoader');
+            loader.classList.add('active');
             try {
               await deleteFileById(Number(btn.dataset.fileid));
               await refreshData();
               await openDetailModal(item.id);
             } finally {
-              fullscreenLoader.classList.remove('active');
+              loader.classList.remove('active');
             }
           }
         });
@@ -1367,13 +1388,14 @@
       const deleteBtn = document.getElementById('deleteItemFromDetailBtn');
       if (deleteBtn) deleteBtn.addEventListener('click', async () => {
         if (confirm(`Excluir o item "${item.name}"?`)) {
-          fullscreenLoader.classList.add('active');
+          const loader = document.getElementById('fullscreenLoader');
+          loader.classList.add('active');
           try {
             await deleteItemAndFiles(item.id);
             detailModalElem.style.display = 'none';
             await refreshData();
           } finally {
-            fullscreenLoader.classList.remove('active');
+            loader.classList.remove('active');
           }
         }
       });
@@ -1417,7 +1439,6 @@
     const closeFormModalBtn = document.getElementById('closeFormModalBtn');
     const cancelFormBtn = document.getElementById('cancelFormBtn');
     const generatePdfBtn = document.getElementById('generatePdfBtn');
-    const fullscreenLoader = document.getElementById('fullscreenLoader');
     const fotoInput = document.getElementById('fotoInspecao');
     const fotoPreview = document.getElementById('fotoPreview');
 
@@ -1471,11 +1492,12 @@
       if (!formData.data_inspecao || !formData.resp_nome) { alert("Preencha Data e Responsável."); return; }
       const fotoFile = document.getElementById('fotoInspecao')?.files[0] || null;
       if (!fotoFile) { alert("Por favor, anexe uma foto da inspeção."); return; }
-      fullscreenLoader.classList.add('active');
+      const loader = document.getElementById('fullscreenLoader');
+      loader.classList.add('active');
       try {
         await generateAndAttachPdf(currentFormItemId, currentFormCategory, currentFormMonthName, formData, currentItemInfo, fotoFile);
         formModal.style.display = 'none';
-      } catch(err) { alert("Erro: " + err.message); } finally { fullscreenLoader.classList.remove('active'); }
+      } catch(err) { alert("Erro: " + err.message); } finally { loader.classList.remove('active'); }
     });
 
     closeFormModalBtn.addEventListener('click', () => formModal.style.display = 'none');
@@ -1535,7 +1557,6 @@
       await initOfflineDB();
       await limparDadosSincronizados();
       
-      // Pré-carregar o modelo PDF se estiver online
       if (navigator.onLine) {
         try {
           console.log('📥 Pré-carregando modelo PDF para uso offline...');
@@ -1555,7 +1576,6 @@
       console.log('Conexão detectada, aguardando estabilização...');
       await new Promise(resolve => setTimeout(resolve, 3000));
       
-      // Pré-carregar modelo PDF quando voltar online
       if (navigator.onLine) {
         try {
           await carregarModeloPDF();
