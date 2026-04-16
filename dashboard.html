@@ -314,14 +314,14 @@
           resolve(dbInstance);
           return;
         }
-        const request = indexedDB.open(DB_NAME_OFFLINE, 19);
+        const request = indexedDB.open(DB_NAME_OFFLINE, 20);
         request.onerror = (event) => {
           console.error('IndexedDB erro:', event);
           reject(request.error);
         };
         request.onsuccess = (event) => {
           dbInstance = request.result;
-          console.log('IndexedDB aberto com sucesso - versão 19');
+          console.log('IndexedDB aberto com sucesso - versão 20');
           
           // Verificar se há dados após abrir
           verificarPersistenciaDados();
@@ -338,10 +338,10 @@
             db.createObjectStore(STORE_FILES, { keyPath: 'id', autoIncrement: true });
           }
           if (!db.objectStoreNames.contains(STORE_PENDING_ITEMS)) {
-            db.createObjectStore(STORE_PENDING_ITEMS, { keyPath: 'id', autoIncrement: true });
+            db.createObjectStore(STORE_PENDING_ITEMS, { keyPath: 'id' });
           }
           if (!db.objectStoreNames.contains(STORE_PENDING_INSPECTIONS)) {
-            db.createObjectStore(STORE_PENDING_INSPECTIONS, { keyPath: 'id', autoIncrement: true });
+            db.createObjectStore(STORE_PENDING_INSPECTIONS, { keyPath: 'id' });
           }
           if (!db.objectStoreNames.contains(STORE_MODELO_PDF)) {
             db.createObjectStore(STORE_MODELO_PDF, { keyPath: 'id' });
@@ -374,20 +374,270 @@
       }
     }
 
-    // ==================== FORÇAR CARREGAMENTO DE DADOS LOCAIS ====================
-    async function carregarDadosLocaisForcado() {
-      console.log('📂 Carregando dados locais do IndexedDB...');
-      const items = await carregarItemsLocal();
-      const files = await carregarFilesLocal();
+    // ==================== CARREGAR ITEMS LOCAL ====================
+    async function carregarItemsLocal() {
+      try {
+        const db = await initOfflineDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_ITEMS, 'readonly');
+          const store = tx.objectStore(STORE_ITEMS);
+          const request = store.getAll();
+          request.onsuccess = () => {
+            const items = request.result || [];
+            console.log(`📦 carregarItemsLocal: ${items.length} itens encontrados`);
+            resolve(items);
+          };
+          request.onerror = () => {
+            console.error('Erro ao carregar items local:', request.error);
+            reject(request.error);
+          };
+        });
+      } catch (e) { 
+        console.warn('Erro ao carregar items local:', e); 
+        return []; 
+      }
+    }
+
+    async function salvarItemsLocal(items) {
+      try {
+        const db = await initOfflineDB();
+        const tx = db.transaction(STORE_ITEMS, 'readwrite');
+        const store = tx.objectStore(STORE_ITEMS);
+        // Limpar store existente
+        await new Promise((resolve, reject) => {
+          const clearReq = store.clear();
+          clearReq.onsuccess = () => resolve();
+          clearReq.onerror = () => reject(clearReq.error);
+        });
+        // Adicionar novos itens
+        for (const item of items) {
+          store.put(item);
+        }
+        return new Promise((resolve, reject) => {
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch (e) { console.warn('Erro ao salvar items local:', e); }
+    }
+
+    async function carregarFilesLocal() {
+      try {
+        const db = await initOfflineDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_FILES, 'readonly');
+          const store = tx.objectStore(STORE_FILES);
+          const request = store.getAll();
+          request.onsuccess = () => {
+            const files = request.result || [];
+            console.log(`📎 carregarFilesLocal: ${files.length} arquivos encontrados`);
+            resolve(files);
+          };
+          request.onerror = () => {
+            console.error('Erro ao carregar files local:', request.error);
+            reject(request.error);
+          };
+        });
+      } catch (e) { 
+        console.warn('Erro ao carregar files local:', e); 
+        return []; 
+      }
+    }
+
+    async function salvarFilesLocal(files) {
+      try {
+        const db = await initOfflineDB();
+        const tx = db.transaction(STORE_FILES, 'readwrite');
+        const store = tx.objectStore(STORE_FILES);
+        await new Promise((resolve, reject) => {
+          const clearReq = store.clear();
+          clearReq.onsuccess = () => resolve();
+          clearReq.onerror = () => reject(clearReq.error);
+        });
+        for (const file of files) {
+          store.put(file);
+        }
+        return new Promise((resolve, reject) => {
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch (e) { console.warn('Erro ao salvar files local:', e); }
+    }
+
+    // ==================== PENDING ITEMS ====================
+    async function salvarItemPending(itemData) {
+      try {
+        const db = await initOfflineDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_PENDING_ITEMS, 'readwrite');
+          const store = tx.objectStore(STORE_PENDING_ITEMS);
+          const request = store.put(itemData);
+          request.onsuccess = () => { console.log('✅ Item pendente salvo com ID:', itemData.id); resolve(request.result); };
+          request.onerror = () => reject(request.error);
+        });
+      } catch (error) { console.error('Erro ao salvar item pendente:', error); throw error; }
+    }
+
+    async function getPendingItems() {
+      const db = await initOfflineDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_PENDING_ITEMS, 'readonly');
+        const store = tx.objectStore(STORE_PENDING_ITEMS);
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function removerItemPending(id) {
+      const db = await initOfflineDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_PENDING_ITEMS, 'readwrite');
+        const store = tx.objectStore(STORE_PENDING_ITEMS);
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    // ==================== PENDING INSPECTIONS ====================
+    async function salvarInspecaoPending(data) {
+      try {
+        const db = await initOfflineDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_PENDING_INSPECTIONS, 'readwrite');
+          const store = tx.objectStore(STORE_PENDING_INSPECTIONS);
+          const request = store.put(data);
+          request.onsuccess = () => { console.log('✅ Inspeção pendente salva com ID:', data.id); resolve(request.result); };
+          request.onerror = () => reject(request.error);
+        });
+      } catch (error) { console.error('Erro ao salvar inspeção pendente:', error); throw error; }
+    }
+
+    async function getPendingInspections() {
+      const db = await initOfflineDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_PENDING_INSPECTIONS, 'readonly');
+        const store = tx.objectStore(STORE_PENDING_INSPECTIONS);
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function removerInspecaoPending(id) {
+      const db = await initOfflineDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_PENDING_INSPECTIONS, 'readwrite');
+        const store = tx.objectStore(STORE_PENDING_INSPECTIONS);
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    // ==================== GET ALL ITEMS WITH FILES (CORRIGIDO) ====================
+    async function getAllItemsWithFiles() {
+      let items = [];
+      let files = [];
+      
+      // SEMPRE carregar do cache local primeiro
+      const itemsLocal = await carregarItemsLocal();
+      const filesLocal = await carregarFilesLocal();
       const pendentesItems = await getPendingItems();
-      const pendentesInsp = await getPendingInspections();
       
-      console.log(`📦 Itens carregados: ${items.length}`);
-      console.log(`📎 Arquivos carregados: ${files.length}`);
-      console.log(`⏳ Pendentes itens: ${pendentesItems.length}`);
-      console.log(`⏳ Pendentes inspeções: ${pendentesInsp.length}`);
+      console.log(`📂 Cache local: ${itemsLocal.length} itens, ${filesLocal.length} arquivos`);
+      console.log(`⏳ Itens pendentes: ${pendentesItems.length}`);
       
-      return { items, files, pendentesItems, pendentesInsp };
+      // Verificar se está online
+      const isOnline = navigator.onLine && await testarConexao();
+      
+      if (!isOnline) {
+        console.log('📡 Modo OFFLINE - usando apenas cache local');
+        items = itemsLocal;
+        files = filesLocal;
+      } else {
+        // Está online - tentar buscar do servidor
+        try {
+          console.log('🌐 Buscando dados do servidor...');
+          const { data: itemsData, error: itemsError } = await supabase.from('items').select('*').order('id', { ascending: true });
+          if (!itemsError && itemsData) {
+            // Mesclar itens do servidor com itens pendentes locais
+            const serverItemCodes = new Set(itemsData.map(i => i.code));
+            const itensPendentesNaoNoServidor = pendentesItems.filter(p => !serverItemCodes.has(p.code));
+            
+            const pendentesComoItens = itensPendentesNaoNoServidor.map(p => ({
+              id: p.id,
+              name: p.name,
+              sub_localizacao: p.sub_localizacao || '',
+              tamanho: p.tamanho || '',
+              code: p.code,
+              status: 'active',
+              pending: true
+            }));
+            
+            items = [...itemsData, ...pendentesComoItens];
+            await salvarItemsLocal(items);
+            console.log(`✅ ${items.length} itens no total (${itemsData.length} do servidor + ${pendentesComoItens.length} pendentes)`);
+          } else {
+            items = itemsLocal;
+          }
+          
+          const { data: filesData, error: filesError } = await supabase.from('files').select('*');
+          if (!filesError && filesData) {
+            files = filesData;
+            await salvarFilesLocal(files);
+          } else {
+            files = filesLocal;
+          }
+          
+        } catch (error) {
+          console.warn('Erro ao buscar online, usando cache local:', error);
+          items = itemsLocal;
+          files = filesLocal;
+        }
+      }
+      
+      if (!items || items.length === 0) {
+        console.warn('⚠️ Nenhum item encontrado');
+        return [];
+      }
+      
+      // Organizar arquivos por item
+      const filesByItem = {};
+      if (files && files.length > 0) {
+        files.forEach(file => { 
+          if (file && file.item_id) {
+            if (!filesByItem[file.item_id]) filesByItem[file.item_id] = []; 
+            filesByItem[file.item_id].push(file); 
+          }
+        });
+      }
+      
+      const result = items.map(item => ({ 
+        id: item.id, 
+        name: item.name || 'Sem nome', 
+        sub_localizacao: item.sub_localizacao || '', 
+        tamanho: item.tamanho || '', 
+        code: item.code || 'SEM-CODIGO', 
+        status: item.status || 'active',
+        pending: item.pending || false,
+        files: filesByItem[item.id] || [] 
+      }));
+      
+      console.log(`✅ Retornando ${result.length} itens para exibição (${result.filter(i => i.pending).length} pendentes)`);
+      return result;
+    }
+
+    // ==================== TESTE DE CONEXÃO ====================
+    async function testarConexao() {
+      if (!navigator.onLine) return false;
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        await fetch('https://www.google.com', { method: 'HEAD', signal: controller.signal, mode: 'no-cors' });
+        clearTimeout(timeoutId);
+        return true;
+      } catch (error) { return navigator.onLine; }
     }
 
     // ==================== ATUALIZAR BADGE DE PENDENTES ====================
@@ -442,7 +692,7 @@
       container.innerHTML = html;
     }
 
-    // ==================== MODAL DE SINCRONIZAÇÃO DETALHADA ====================
+    // ==================== MODAL DE SINCRONIZAÇÃO ====================
     async function mostrarModalSincronizacao() {
       const syncModal = document.getElementById('syncModal');
       const syncModalList = document.getElementById('syncModalList');
@@ -499,20 +749,27 @@
       let erros = 0;
       const mapaIds = {};
       
+      if (total === 0) {
+        console.log('✅ Nenhum item pendente para sincronizar');
+        return;
+      }
+      
+      console.log(`🔄 Iniciando sincronização de ${total} itens...`);
+      
       function atualizarProgresso(sucesso) {
         concluidos++;
         const percent = (concluidos / total) * 100;
         if (syncModalProgress) syncModalProgress.style.width = `${percent}%`;
       }
       
-      // FASE 1: Sincronizar itens
-      console.log('📦 FASE 1: Sincronizando itens...');
+      // FASE 1: Sincronizar itens pendentes
+      console.log('📦 Sincronizando itens pendentes...');
       
       for (const item of pendentesItems) {
         try {
           const element = document.getElementById(`sync-item-${item.id}`);
           if (element) {
-            element.querySelector('span:last-child').innerHTML = '<span style="color: #f59e0b;">🔄 Verificando...</span>';
+            element.querySelector('span:last-child').innerHTML = '<span style="color: #f59e0b;">🔄 Sincronizando...</span>';
           }
           
           const { data: existing, error: checkError } = await supabase
@@ -531,11 +788,8 @@
             }
             await removerItemPending(item.id);
             atualizarProgresso(true);
+            console.log(`✅ Item ${item.code} já existia, removido da fila`);
             continue;
-          }
-          
-          if (element) {
-            element.querySelector('span:last-child').innerHTML = '<span style="color: #f59e0b;">🔄 Criando item...</span>';
           }
           
           const { data: newItem, error: insertError } = await supabase.from('items').insert({
@@ -546,26 +800,7 @@
             status: 'active'
           }).select().single();
           
-          if (insertError) {
-            if (insertError.code === '23505') {
-              const { data: existingAgain } = await supabase
-                .from('items')
-                .select('id')
-                .eq('code', item.code)
-                .single();
-              if (existingAgain) {
-                mapaIds[item.code] = existingAgain.id;
-                if (element) {
-                  element.querySelector('span:last-child').innerHTML = '<span style="color: #10b981;">✅ Código já existia</span>';
-                  element.style.background = '#d1fae5';
-                }
-                await removerItemPending(item.id);
-                atualizarProgresso(true);
-                continue;
-              }
-            }
-            throw insertError;
-          }
+          if (insertError) throw insertError;
           
           mapaIds[item.code] = newItem.id;
           await removerItemPending(item.id);
@@ -589,14 +824,14 @@
         }
       }
       
-      // FASE 2: Sincronizar inspeções
-      console.log('📋 FASE 2: Sincronizando inspeções...');
+      // FASE 2: Sincronizar inspeções pendentes
+      console.log('📋 Sincronizando inspeções pendentes...');
       
       for (const insp of pendentesInsp) {
         try {
           const element = document.getElementById(`sync-insp-${insp.id}`);
           if (element) {
-            element.querySelector('span:last-child').innerHTML = '<span style="color: #f59e0b;">🔄 Verificando item pai...</span>';
+            element.querySelector('span:last-child').innerHTML = '<span style="color: #f59e0b;">🔄 Sincronizando...</span>';
           }
           
           let itemIdReal = mapaIds[insp.itemInfo?.code];
@@ -610,16 +845,10 @@
             
             if (itemError) throw itemError;
             
-            if (itemData) {
-              itemIdReal = itemData.id;
-              mapaIds[insp.itemInfo.code] = itemIdReal;
-            } else {
-              throw new Error(`Item pai não encontrado (Código: ${insp.itemInfo?.code})`);
+            if (!itemData) {
+              throw new Error(`Item pai não encontrado: ${insp.itemInfo?.code}`);
             }
-          }
-          
-          if (element) {
-            element.querySelector('span:last-child').innerHTML = '<span style="color: #f59e0b;">🔄 Enviando PDF...</span>';
+            itemIdReal = itemData.id;
           }
           
           const pdfBlob = base64ToBlob(insp.pdfBase64, 'application/pdf');
@@ -639,6 +868,7 @@
             element.style.background = '#d1fae5';
           }
           atualizarProgresso(true);
+          console.log(`✅ Inspeção para ${insp.itemInfo?.code} sincronizada`);
           
         } catch (error) {
           console.error(`❌ Erro ao sincronizar inspeção:`, error);
@@ -652,24 +882,26 @@
         }
       }
       
+      // Atualizar tudo após sincronização
       await refreshData();
       await updatePendingBadge();
       await listarPendentesNoModal();
       await updateUserModalCacheStatus();
       
-      const mensagem = `✅ Sincronização concluída! ${concluidos - erros}/${total} itens processados.${erros > 0 ? ` ${erros} erro(s).` : ''}`;
+      const sucessos = concluidos - erros;
+      const mensagem = `✅ Sincronização concluída! ${sucessos}/${total} itens processados.${erros > 0 ? ` ${erros} erro(s).` : ''}`;
       showSyncStatus(mensagem, erros > 0);
+      console.log(mensagem);
       
       return { concluidos, erros };
     }
 
-    // ==================== VERIFICAR E SINCRONIZAR PERSISTENTE ====================
+    // ==================== VERIFICAR E SINCRONIZAR ====================
     let verificadorAtivo = false;
     
     async function verificarESincronizar() {
       if (!navigator.onLine) {
         console.log('📡 Offline - verificando dados locais...');
-        await carregarDadosLocaisForcado();
         return false;
       }
       if (verificadorAtivo) return false;
@@ -698,7 +930,7 @@
       }
     }
 
-    // ==================== UPDATE CACHE STATUS NO MODAL ====================
+    // ==================== UPDATE CACHE STATUS ====================
     async function updateUserModalCacheStatus() {
       const statusDiv = document.getElementById('userModalCacheStatus');
       try {
@@ -723,7 +955,7 @@
       }
     }
 
-    // ==================== MOSTRAR STATUS DE SINCRONIZAÇÃO ====================
+    // ==================== MOSTRAR STATUS ====================
     function showSyncStatus(message, isError = false) {
       const statusDiv = document.getElementById('syncStatus');
       statusDiv.textContent = message;
@@ -732,48 +964,6 @@
       setTimeout(() => {
         statusDiv.style.display = 'none';
       }, 4000);
-    }
-
-    // ==================== LIMPAR CACHE COMPLETO ====================
-    async function limparCacheOffline() {
-      if (!confirm('⚠️ ATENÇÃO: Isso irá limpar TODO o cache offline, incluindo itens pendentes não sincronizados.\n\nDeseja continuar?')) return;
-      
-      const loader = document.getElementById('fullscreenLoader');
-      loader.classList.add('active');
-      
-      try {
-        const db = await initOfflineDB();
-        
-        const stores = [STORE_ITEMS, STORE_FILES, STORE_PENDING_ITEMS, STORE_PENDING_INSPECTIONS, STORE_SYNC_LOG];
-        for (const store of stores) {
-          const tx = db.transaction(store, 'readwrite');
-          await new Promise((resolve, reject) => {
-            const req = tx.objectStore(store).clear();
-            req.onsuccess = () => resolve();
-            req.onerror = () => reject(req.error);
-          });
-        }
-        
-        const txModelo = db.transaction(STORE_MODELO_PDF, 'readwrite');
-        await new Promise((resolve, reject) => {
-          const req = txModelo.objectStore(STORE_MODELO_PDF).clear();
-          req.onsuccess = () => resolve();
-          req.onerror = () => reject(req.error);
-        });
-        
-        cachedModeloPDF = null;
-        
-        console.log('✅ Cache offline limpo completamente');
-        showSyncStatus('✅ Cache limpo! Recarregando...');
-        
-        setTimeout(() => window.location.reload(), 2000);
-        
-      } catch (error) {
-        console.error('❌ Erro ao limpar cache:', error);
-        alert('Erro ao limpar cache: ' + error.message);
-      } finally {
-        loader.classList.remove('active');
-      }
     }
 
     // ==================== PREPARAR MODO OFFLINE ====================
@@ -819,7 +1009,49 @@
       }
     }
 
-    // ==================== VERIFICAR SE MODELO ESTÁ CACHEADO ====================
+    // ==================== LIMPAR CACHE OFFLINE ====================
+    async function limparCacheOffline() {
+      if (!confirm('⚠️ ATENÇÃO: Isso irá limpar TODO o cache offline, incluindo itens pendentes não sincronizados.\n\nDeseja continuar?')) return;
+      
+      const loader = document.getElementById('fullscreenLoader');
+      loader.classList.add('active');
+      
+      try {
+        const db = await initOfflineDB();
+        
+        const stores = [STORE_ITEMS, STORE_FILES, STORE_PENDING_ITEMS, STORE_PENDING_INSPECTIONS, STORE_SYNC_LOG];
+        for (const store of stores) {
+          const tx = db.transaction(store, 'readwrite');
+          await new Promise((resolve, reject) => {
+            const req = tx.objectStore(store).clear();
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+          });
+        }
+        
+        const txModelo = db.transaction(STORE_MODELO_PDF, 'readwrite');
+        await new Promise((resolve, reject) => {
+          const req = txModelo.objectStore(STORE_MODELO_PDF).clear();
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        });
+        
+        cachedModeloPDF = null;
+        
+        console.log('✅ Cache offline limpo completamente');
+        showSyncStatus('✅ Cache limpo! Recarregando...');
+        
+        setTimeout(() => window.location.reload(), 2000);
+        
+      } catch (error) {
+        console.error('❌ Erro ao limpar cache:', error);
+        alert('Erro ao limpar cache: ' + error.message);
+      } finally {
+        loader.classList.remove('active');
+      }
+    }
+
+    // ==================== CARREGAR MODELO PDF ====================
     async function isModeloCacheado() {
       try {
         const db = await initOfflineDB();
@@ -835,7 +1067,6 @@
       }
     }
 
-    // ==================== CARREGAR MODELO PDF ====================
     async function carregarModeloPDF() {
       if (cachedModeloPDF) return cachedModeloPDF;
       
@@ -887,7 +1118,7 @@
       }
     }
 
-    // ==================== LIMPAR DADOS PENDENTES ANTIGOS ====================
+    // ==================== LIMPAR DADOS SINCRONIZADOS ====================
     async function limparDadosSincronizados() {
       try {
         const db = await initOfflineDB();
@@ -910,131 +1141,16 @@
       }
     }
 
-    // ==================== ITEMS CACHE ====================
-    async function salvarItemsLocal(items) {
-      try {
-        const db = await initOfflineDB();
-        const tx = db.transaction(STORE_ITEMS, 'readwrite');
-        const store = tx.objectStore(STORE_ITEMS);
-        for (const item of items) store.put(item);
-        return new Promise((resolve, reject) => {
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-        });
-      } catch (e) { console.warn('Erro ao salvar items local:', e); }
+    // ==================== REFRESH DATA ====================
+    async function refreshData() { 
+      const novosItems = await getAllItemsWithFiles();
+      currentItems = novosItems;
+      renderCards(document.getElementById('searchInput').value);
+      await updatePendingBadge();
+      console.log(`🔄 Refresh concluído - ${currentItems.length} itens exibidos`);
     }
 
-    async function carregarItemsLocal() {
-      try {
-        const db = await initOfflineDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction(STORE_ITEMS, 'readonly');
-          const store = tx.objectStore(STORE_ITEMS);
-          const request = store.getAll();
-          request.onsuccess = () => resolve(request.result || []);
-          request.onerror = () => reject(request.error);
-        });
-      } catch (e) { console.warn('Erro ao carregar items local:', e); return []; }
-    }
-
-    async function salvarFilesLocal(files) {
-      try {
-        const db = await initOfflineDB();
-        const tx = db.transaction(STORE_FILES, 'readwrite');
-        const store = tx.objectStore(STORE_FILES);
-        for (const file of files) store.put(file);
-        return new Promise((resolve, reject) => {
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-        });
-      } catch (e) { console.warn('Erro ao salvar files local:', e); }
-    }
-
-    async function carregarFilesLocal() {
-      try {
-        const db = await initOfflineDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction(STORE_FILES, 'readonly');
-          const store = tx.objectStore(STORE_FILES);
-          const request = store.getAll();
-          request.onsuccess = () => resolve(request.result || []);
-          request.onerror = () => reject(request.error);
-        });
-      } catch (e) { console.warn('Erro ao carregar files local:', e); return []; }
-    }
-
-    // ==================== PENDING ITEMS ====================
-    async function salvarItemPending(itemData) {
-      try {
-        const db = await initOfflineDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction(STORE_PENDING_ITEMS, 'readwrite');
-          const store = tx.objectStore(STORE_PENDING_ITEMS);
-          const request = store.add(itemData);
-          request.onsuccess = () => { console.log('✅ Item pendente salvo'); resolve(request.result); };
-          request.onerror = () => reject(request.error);
-        });
-      } catch (error) { console.error('Erro ao salvar item pendente:', error); throw error; }
-    }
-
-    async function getPendingItems() {
-      const db = await initOfflineDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_PENDING_ITEMS, 'readonly');
-        const store = tx.objectStore(STORE_PENDING_ITEMS);
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result || []);
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    async function removerItemPending(id) {
-      const db = await initOfflineDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_PENDING_ITEMS, 'readwrite');
-        const store = tx.objectStore(STORE_PENDING_ITEMS);
-        const request = store.delete(id);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    // ==================== PENDING INSPECTIONS ====================
-    async function salvarInspecaoPending(data) {
-      try {
-        const db = await initOfflineDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction(STORE_PENDING_INSPECTIONS, 'readwrite');
-          const store = tx.objectStore(STORE_PENDING_INSPECTIONS);
-          const request = store.add(data);
-          request.onsuccess = () => { console.log('✅ Inspeção pendente salva'); resolve(request.result); };
-          request.onerror = () => reject(request.error);
-        });
-      } catch (error) { console.error('Erro ao salvar inspeção pendente:', error); throw error; }
-    }
-
-    async function getPendingInspections() {
-      const db = await initOfflineDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_PENDING_INSPECTIONS, 'readonly');
-        const store = tx.objectStore(STORE_PENDING_INSPECTIONS);
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result || []);
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    async function removerInspecaoPending(id) {
-      const db = await initOfflineDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_PENDING_INSPECTIONS, 'readwrite');
-        const store = tx.objectStore(STORE_PENDING_INSPECTIONS);
-        const request = store.delete(id);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
-    }
-
+    // ==================== FUNÇÕES AUXILIARES ====================
     function blobToBase64(blob) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -1052,17 +1168,9 @@
       return new Blob([byteArray], { type: mimeType });
     }
 
-    // ==================== TESTE DE CONEXÃO ====================
-    async function testarConexao() {
-      if (!navigator.onLine) return false;
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        await fetch('https://www.google.com', { method: 'HEAD', signal: controller.signal, mode: 'no-cors' });
-        clearTimeout(timeoutId);
-        return true;
-      } catch (error) { return navigator.onLine; }
-    }
+    function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
+    
+    function formatarData(dataString) { if (!dataString) return ''; const partes = dataString.split('-'); if (partes.length === 3) return `${partes[2]}/${partes[1]}/${partes[0]}`; return dataString; }
 
     // ==================== STATUS DE CONEXÃO ====================
     const connectionStatus = document.getElementById('connectionStatus');
@@ -1156,6 +1264,7 @@
     if (cancelSyncModalBtn) cancelSyncModalBtn.addEventListener('click', () => syncModal.style.display = 'none');
     if (syncModal) syncModal.addEventListener('click', (e) => { if (e.target === syncModal) syncModal.style.display = 'none'; });
 
+    // ==================== CONSTANTES ====================
     const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
     const monthKeys = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
@@ -1187,11 +1296,13 @@
       "[Inspeção] A lona de cobertura está sem nenhuma deformação ocasionada por acumulo de água, folhas, minério, etc.?"
     ];
 
+    // ==================== VARIÁVEIS GLOBAIS ====================
     let currentFormItemId = null, currentFormCategory = null, currentFormMonthName = null, currentItemInfo = null;
     let currentItems = [];
     let reactivatingItemId = null;
     window.currentDetailItem = null;
 
+    // ==================== FUNÇÕES DE ARQUIVO ====================
     function getStoragePathFromUrl(url) {
       const regex = /\/storage\/v1\/object\/public\/pdfs\/(.+)$/;
       const match = url.match(regex);
@@ -1204,36 +1315,6 @@
       const { error } = await supabase.storage.from(BUCKET).remove([path]);
       if (error) console.error("Erro ao deletar arquivo do storage:", error);
       return !error;
-    }
-
-    async function getAllItemsWithFiles() {
-      let items = [];
-      let files = [];
-      
-      if (navigator.onLine && await testarConexao()) {
-        try {
-          const { data: itemsData, error: itemsError } = await supabase.from('items').select('*').order('id', { ascending: true });
-          if (itemsError) throw itemsError;
-          items = itemsData;
-          const { data: filesData, error: filesError } = await supabase.from('files').select('*');
-          if (filesError) throw filesError;
-          files = filesData;
-          await salvarItemsLocal(items);
-          await salvarFilesLocal(files);
-        } catch (error) {
-          console.warn('Erro ao buscar online, usando cache local:', error);
-          items = await carregarItemsLocal();
-          files = await carregarFilesLocal();
-        }
-      } else {
-        items = await carregarItemsLocal();
-        files = await carregarFilesLocal();
-        console.log(`📂 Modo offline - carregados ${items.length} itens do cache local`);
-      }
-      
-      const filesByItem = {};
-      files.forEach(file => { if (!filesByItem[file.item_id]) filesByItem[file.item_id] = []; filesByItem[file.item_id].push(file); });
-      return items.map(item => ({ id: item.id, name: item.name, sub_localizacao: item.sub_localizacao || '', tamanho: item.tamanho || '', code: item.code, status: item.status || 'active', files: filesByItem[item.id] || [] }));
     }
 
     async function addFileToItem(itemId, category, file, inspecaoData = null) {
@@ -1285,24 +1366,14 @@
       await salvarFilesLocal(filteredFiles);
     }
 
+    // ==================== SAVE ITEM COMPLETE ====================
     async function saveItemComplete(itemId, name, sub_localizacao, tamanho, code, filesToProcess) {
-      if (navigator.onLine && await testarConexao()) {
-        const { data: existing, error: dupError } = await supabase
-          .from('items')
-          .select('id')
-          .eq('code', code)
-          .maybeSingle();
-        
-        if (dupError) throw dupError;
-        if (existing && existing.id !== itemId) {
-          alert(`❌ O código "${code}" já está em uso no servidor. Use outro código.`);
-          throw new Error(`Código "${code}" já existe no servidor`);
-        }
-      }
+      const isOnline = navigator.onLine && await testarConexao();
+      const offlineId = itemId || `offline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      if (!navigator.onLine || !(await testarConexao())) {
+      if (!isOnline) {
         const itemsLocal = await carregarItemsLocal();
-        const existeLocal = itemsLocal.some(i => i.code === code && i.id !== itemId);
+        const existeLocal = itemsLocal.some(i => i.code === code && i.id !== offlineId);
         
         if (existeLocal) {
           alert('❌ Este código já existe localmente. Aguarde a sincronização ou use outro código.');
@@ -1310,6 +1381,7 @@
         }
         
         const pendingData = {
+          id: offlineId,
           name: name,
           sub_localizacao: sub_localizacao || '',
           tamanho: tamanho || '',
@@ -1318,9 +1390,8 @@
         };
         await salvarItemPending(pendingData);
         
-        const newId = Date.now();
         const newItem = {
-          id: newId,
+          id: offlineId,
           name: name,
           sub_localizacao: sub_localizacao || '',
           tamanho: tamanho || '',
@@ -1330,16 +1401,29 @@
           pending: true
         };
         
-        const items = await carregarItemsLocal();
-        items.push(newItem);
-        await salvarItemsLocal(items);
+        itemsLocal.push(newItem);
+        await salvarItemsLocal(itemsLocal);
         await refreshData();
         await updatePendingBadge();
         
+        console.log(`✅ Item offline salvo com ID persistente: ${offlineId}`);
         alert('⚠️ Você está offline. O item foi salvo localmente e será sincronizado quando a internet voltar.');
-        return newId;
+        return offlineId;
       }
-
+      
+      // MODO ONLINE
+      const { data: existing, error: dupError } = await supabase
+        .from('items')
+        .select('id')
+        .eq('code', code)
+        .maybeSingle();
+      
+      if (dupError) throw dupError;
+      if (existing && existing.id !== itemId) {
+        alert(`❌ O código "${code}" já está em uso no servidor. Use outro código.`);
+        throw new Error(`Código "${code}" já existe no servidor`);
+      }
+      
       const uploadedUrls = [];
       for (const item of filesToProcess) {
         if (item.file) {
@@ -1367,7 +1451,7 @@
         status: 'active'
       };
       
-      if (itemId) {
+      if (itemId && !itemId.toString().startsWith('offline_')) {
         await supabase.from('items').update(itemData).eq('id', itemId);
       } else {
         const { data: newItem, error: insertError } = await supabase
@@ -1384,6 +1468,13 @@
           throw insertError;
         }
         itemIdFinal = newItem.id;
+        
+        const pendentesItems = await getPendingItems();
+        const pendenteExistente = pendentesItems.find(p => p.code === code);
+        if (pendenteExistente) {
+          await removerItemPending(pendenteExistente.id);
+          console.log(`✅ Item pendente removido após criação online: ${code}`);
+        }
       }
 
       for (const fileInfo of uploadedUrls) {
@@ -1418,6 +1509,7 @@
       return itemIdFinal;
     }
 
+    // ==================== FUNÇÕES DE INSPEÇÃO E PDF ====================
     async function saveHistory(itemId, oldData) {
       if (!oldData) return;
       await supabase.from('items_history').insert({ item_id: itemId, name: oldData.name, sub_localizacao: oldData.sub_localizacao, tamanho: oldData.tamanho, code: oldData.code, changed_by: currentUser?.username || 'sistema' });
@@ -1508,11 +1600,13 @@
         return;
       }
       
-      if (!navigator.onLine || !(await testarConexao())) {
+      const isOnline = navigator.onLine && await testarConexao();
+      
+      if (!isOnline) {
         try {
           const loader = document.getElementById('fullscreenLoader');
           loader.classList.add('active');
-          console.log('Modo offline - iniciando salvamento local...');
+          console.log('💾 Modo offline - salvando inspeção localmente...');
           
           if (!temModelo) {
             throw new Error('Modelo PDF não está cacheado para uso offline');
@@ -1523,7 +1617,10 @@
           let fotoBase64 = null;
           if (fotoFile) fotoBase64 = await blobToBase64(fotoFile);
           
+          const pendingId = `insp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          
           const pendingData = {
+            id: pendingId,
             type: 'inspecao',
             itemId: itemId,
             category: category,
@@ -1540,19 +1637,23 @@
             timestamp: new Date().toISOString()
           };
           await salvarInspecaoPending(pendingData);
+          
           loader.classList.remove('active');
           await updatePendingBadge();
+          
+          console.log(`✅ Inspeção offline salva com ID: ${pendingId}`);
           alert('⚠️ Você está offline. O PDF foi salvo localmente e será enviado automaticamente quando a internet voltar.');
           return;
         } catch (error) {
           const loader = document.getElementById('fullscreenLoader');
           loader.classList.remove('active');
-          console.error('Erro detalhado ao salvar offline:', error);
+          console.error('❌ Erro ao salvar offline:', error);
           alert('Erro ao salvar inspeção localmente: ' + (error.message || 'Verifique o console'));
           return;
         }
       }
 
+      // MODO ONLINE
       try {
         if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
         const { PDFDocument } = window.PDFLib;
@@ -1660,6 +1761,7 @@
       });
     }
 
+    // ==================== RENDERIZAÇÃO ====================
     function renderCards(filterText = "") {
       const container = document.getElementById('itemsContainer');
       const lowerFilter = filterText.toLowerCase();
@@ -1680,20 +1782,14 @@
         } else inspecaoMsg = `<p style="color: #f59e0b; font-size: 0.7rem; margin-top: 0.3rem;">⚠️ Inspeção ${mesAtualNome}: pendente</p>`;
         const statusClass = item.status === 'active' ? 'status-active' : 'status-inactive';
         const statusText = item.status === 'active' ? 'Ativo' : 'Inativo';
-        return `<div class="item-card" data-id="${item.id}"><div><h3>${escapeHtml(item.name)}</h3><p>TAG: ${escapeHtml(item.code)}</p>${item.sub_localizacao ? `<p>📍 ${escapeHtml(item.sub_localizacao)}</p>` : ''}${item.tamanho ? `<p>📏 ${escapeHtml(item.tamanho)}</p>` : ''}<div><span class="status-badge ${statusClass}">${statusText}</span></div>${inspecaoMsg}</div></div>`;
+        const pendingIcon = item.pending ? '<span style="background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 12px; font-size: 0.6rem; margin-left: 8px;">⏳ Pendente</span>' : '';
+        return `<div class="item-card" data-id="${item.id}"><div><h3>${escapeHtml(item.name)}${pendingIcon}</h3><p>TAG: ${escapeHtml(item.code)}</p>${item.sub_localizacao ? `<p>📍 ${escapeHtml(item.sub_localizacao)}</p>` : ''}${item.tamanho ? `<p>📏 ${escapeHtml(item.tamanho)}</p>` : ''}<div><span class="status-badge ${statusClass}">${statusText}</span></div>${inspecaoMsg}</div></div>`;
       }).join('');
       
       document.querySelectorAll('.item-card').forEach(card => { card.addEventListener('click', () => openDetailModal(parseInt(card.dataset.id))); });
     }
-    
-    function formatarData(dataString) { if (!dataString) return ''; const partes = dataString.split('-'); if (partes.length === 3) return `${partes[2]}/${partes[1]}/${partes[0]}`; return dataString; }
-    function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
-    async function refreshData() { 
-      currentItems = await getAllItemsWithFiles(); 
-      renderCards(document.getElementById('searchInput').value);
-      await updatePendingBadge();
-    }
 
+    // ==================== MODAL DETALHE ====================
     const detailModalElem = document.getElementById('detailModal');
     const detailContent = document.getElementById('detailContent');
     const closeDetailModalBtn = document.getElementById('closeDetailModalBtn');
@@ -1718,7 +1814,7 @@
       const monthlyFiles = monthKeys.map(key => files.find(f => f.category === key));
       const isActive = item.status === 'active';
       
-      let html = `<div class="status-container"><span style="font-weight: 500;">Status:</span><label class="toggle-switch"><input type="checkbox" id="statusToggle" ${isActive ? 'checked' : ''}><span class="slider"></span></label><span class="status-text" id="statusText">${isActive ? 'Ativo' : 'Inativo'}</span></div>${!isActive ? '<div class="inactive-message">⚠️ Item inativo. Não é possível anexar PDFs ou gerar formulários.</div>' : ''}<div class="item-detail-title"><strong>${escapeHtml(item.name)}</strong><br>${item.sub_localizacao ? `Sub. Localização: ${escapeHtml(item.sub_localizacao)}<br>` : ''}${item.tamanho ? `Tamanho: ${escapeHtml(item.tamanho)}<br>` : ''}ID: ${escapeHtml(item.code)}</div><div class="pdf-group"><div class="pdf-group-title">📄 Memorial de Cálculo</div>${renderDetailPdfRow('memorial', 'Memorial', memorialFile, item.id, isActive)}</div><div class="pdf-group"><div class="pdf-group-title">📅 Documentos Mensais</div>${monthNames.map((month, idx) => renderDetailPdfRow(monthKeys[idx], month, monthlyFiles[idx], item.id, isActive, true)).join('')}</div><button class="delete-item-btn" id="deleteItemFromDetailBtn">🗑️ Excluir este item</button><div class="notice">* Clique nos botões + para anexar/substituir PDFs. Clique em 📝 para preencher formulário e gerar PDF.</div>`;
+      let html = `<div class="status-container"><span style="font-weight: 500;">Status:</span><label class="toggle-switch"><input type="checkbox" id="statusToggle" ${isActive ? 'checked' : ''}><span class="slider"></span></label><span class="status-text" id="statusText">${isActive ? 'Ativo' : 'Inativo'}</span></div>${!isActive ? '<div class="inactive-message">⚠️ Item inativo. Não é possível anexar PDFs ou gerar formulários.</div>' : ''}<div class="item-detail-title"><strong>${escapeHtml(item.name)}</strong><br>${item.sub_localizacao ? `Sub. Localização: ${escapeHtml(item.sub_localizacao)}<br>` : ''}${item.tamanho ? `Tamanho: ${escapeHtml(item.tamanho)}<br>` : ''}ID: ${escapeHtml(item.code)}${item.pending ? '<br><span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem;">⏳ Pendente de sincronização</span>' : ''}</div><div class="pdf-group"><div class="pdf-group-title">📄 Memorial de Cálculo</div>${renderDetailPdfRow('memorial', 'Memorial', memorialFile, item.id, isActive)}</div><div class="pdf-group"><div class="pdf-group-title">📅 Documentos Mensais</div>${monthNames.map((month, idx) => renderDetailPdfRow(monthKeys[idx], month, monthlyFiles[idx], item.id, isActive, true)).join('')}</div><button class="delete-item-btn" id="deleteItemFromDetailBtn">🗑️ Excluir este item</button><div class="notice">* Clique nos botões + para anexar/substituir PDFs. Clique em 📝 para preencher formulário e gerar PDF.</div>`;
       detailContent.innerHTML = html;
       
       const toggle = document.getElementById('statusToggle');
@@ -1739,6 +1835,7 @@
       else return `<div class="pdf-row"><span class="pdf-label">${escapeHtml(label)}</span><div class="pdf-file-info">— Nenhum PDF anexado —</div><div class="pdf-actions ${disabledClass}"><button class="upload-pdf-btn" data-itemid="${itemId}" data-category="${category}" data-monthname="${label}" title="Adicionar PDF">➕</button>${showFormButton ? `<button class="fill-form-btn" data-itemid="${itemId}" data-category="${category}" data-monthname="${label}" title="Preencher formulário">📝</button>` : ''}</div></div>`;
     }
 
+    // ==================== MODAL FORMULÁRIO ====================
     const formModal = document.getElementById('formModal');
     const formFieldsContainer = document.getElementById('formFieldsContainer');
     const closeFormModalBtn = document.getElementById('closeFormModalBtn');
@@ -1783,6 +1880,7 @@
     closeFormModalBtn.addEventListener('click', () => formModal.style.display = 'none');
     cancelFormBtn.addEventListener('click', () => formModal.style.display = 'none');
 
+    // ==================== MODAL REATIVAR ====================
     const reactivateModal = document.getElementById('reactivateModal');
     const closeReactivateModalBtn = document.getElementById('closeReactivateModalBtn');
     const cancelReactivateBtn = document.getElementById('cancelReactivateBtn');
@@ -1791,16 +1889,21 @@
     cancelReactivateBtn.addEventListener('click', () => reactivateModal.style.display = 'none');
     confirmReactivateBtn.addEventListener('click', saveReactivate);
 
+    // ==================== MODAL CRIAR ITEM ====================
     const createModal = document.getElementById('createItemModal');
     const closeCreateBtn = document.getElementById('closeCreateModalBtn'), cancelCreateBtn = document.getElementById('cancelCreateBtn'), confirmCreateBtn = document.getElementById('confirmCreateBtn');
     const newItemName = document.getElementById('newItemName'), newSubLocalizacao = document.getElementById('newSubLocalizacao'), newTamanho = document.getElementById('newTamanho'), newItemCode = document.getElementById('newItemCode'), newMemorialFile = document.getElementById('newMemorialFile'), newMonthlyContainer = document.getElementById('newMonthlyFilesContainer'), createCodeError = document.getElementById('createCodeError');
+    
     function buildNewMonthlyInputs() { newMonthlyContainer.innerHTML = ''; monthNames.forEach((month, idx) => { const div = document.createElement('div'); div.className = 'month-group'; const label = document.createElement('label'); label.textContent = month + ':'; const input = document.createElement('input'); input.type = 'file'; input.accept = '.pdf'; input.id = `new_month_${monthKeys[idx]}`; div.appendChild(label); div.appendChild(input); newMonthlyContainer.appendChild(div); }); }
     buildNewMonthlyInputs();
+    
     function openCreateModal() { newItemName.value = ''; newSubLocalizacao.value = ''; newTamanho.value = ''; newItemCode.value = ''; newMemorialFile.value = ''; monthKeys.forEach(key => { const inp = document.getElementById(`new_month_${key}`); if (inp) inp.value = ''; }); createCodeError.innerText = ''; createModal.style.display = 'flex'; }
+    
     closeCreateBtn.addEventListener('click', () => createModal.style.display = 'none');
     cancelCreateBtn.addEventListener('click', () => createModal.style.display = 'none');
     confirmCreateBtn.addEventListener('click', async () => { const name = newItemName.value.trim(), sub_localizacao = newSubLocalizacao.value.trim(), tamanho = newTamanho.value.trim(), code = newItemCode.value.trim(); if (!name || !code) { createCodeError.innerText = 'Preencha nome e código.'; return; } createCodeError.innerText = ''; const filesToProcess = []; if (newMemorialFile.files.length > 0) filesToProcess.push({ category: 'memorial', file: newMemorialFile.files[0] }); else filesToProcess.push({ category: 'memorial', file: null }); for (let i=0; i<monthKeys.length; i++) { const key = monthKeys[i]; const inp = document.getElementById(`new_month_${key}`); if (inp && inp.files.length > 0) filesToProcess.push({ category: key, file: inp.files[0] }); else filesToProcess.push({ category: key, file: null }); } try { await saveItemComplete(null, name, sub_localizacao, tamanho, code, filesToProcess); createModal.style.display = 'none'; refreshData(); } catch(err) { if (err.message.includes('código')) createCodeError.innerText = err.message; else alert('Erro ao criar item: ' + err.message); } });
 
+    // ==================== DOWNLOAD MENSAL ====================
     async function downloadMonthPDFs(category, monthName) {
       try {
         if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
@@ -1818,6 +1921,7 @@
       } catch(err) { alert(`Erro: ${err.message}`); }
     }
 
+    // ==================== EVENT LISTENERS ====================
     document.getElementById('addItemBtn').addEventListener('click', openCreateModal);
     document.getElementById('searchInput').addEventListener('input', (e) => renderCards(e.target.value));
     const monthContainer = document.getElementById('monthButtonsContainer');
@@ -1829,15 +1933,12 @@
     window.addEventListener('DOMContentLoaded', async () => {
       console.log('🚀 Inicializando TENDEX...');
       
-      // 1. Iniciar IndexedDB
       await initOfflineDB();
       await limparDadosSincronizados();
+      await verificarPersistenciaDados();
       
-      // 2. Carregar dados locais primeiro (offline)
-      await carregarDadosLocaisForcado();
       await refreshData();
       
-      // 3. Verificar modelo PDF
       const modeloCacheado = await isModeloCacheado();
       if (!modeloCacheado && navigator.onLine) {
         console.log('📥 Baixando modelo PDF...');
@@ -1847,7 +1948,6 @@
         } catch(e) { console.error('Erro ao baixar modelo:', e); }
       }
       
-      // 4. Sincronizar se estiver online
       if (navigator.onLine) {
         console.log('🔄 Verificando pendentes para sincronizar...');
         await verificarESincronizar();
@@ -1859,7 +1959,6 @@
       inicializacaoCompleta = true;
       console.log('✅ Inicialização concluída!');
       
-      // Verificação periódica a cada 30 segundos
       setInterval(async () => {
         if (navigator.onLine && inicializacaoCompleta) {
           await verificarESincronizar();
@@ -1867,7 +1966,6 @@
       }, 30000);
     });
     
-    // Detectar quando voltar online
     let syncScheduled = false;
     window.addEventListener('online', async () => {
       if (!inicializacaoCompleta) return;
@@ -1883,7 +1981,6 @@
       }
     });
     
-    // Salvar dados antes de fechar a página
     window.addEventListener('beforeunload', async () => {
       console.log('💾 Salvando dados antes de fechar...');
       await refreshData();
