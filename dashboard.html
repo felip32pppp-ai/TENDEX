@@ -42,13 +42,24 @@
     .modal-header h2 { font-size: 1.3rem; }
     .close-modal { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b; padding: 0 0.5rem; }
     .close-modal:hover { color: #ef4444; }
-    .logout-modal-content { max-width: 400px; text-align: center; }
+    .logout-modal-content { max-width: 500px; text-align: center; }
     .logout-modal-content p { margin: 1rem 0; font-size: 1.1rem; }
     .logout-buttons { display: flex; gap: 1rem; justify-content: center; margin-top: 1rem; }
     .btn-confirm { background: #ef4444; color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 2rem; cursor: pointer; font-weight: 600; }
     .btn-confirm:hover { background: #dc2626; }
     .btn-cancel-logout { background: #64748b; color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 2rem; cursor: pointer; font-weight: 600; }
     .btn-cancel-logout:hover { background: #475569; }
+    .btn-primary { background: #1e4a76; color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 2rem; cursor: pointer; font-weight: 600; margin: 0.25rem; }
+    .btn-primary:hover { background: #0f2b3d; }
+    .btn-warning { background: #f59e0b; color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 2rem; cursor: pointer; font-weight: 600; margin: 0.25rem; }
+    .btn-warning:hover { background: #d97706; }
+    .btn-danger { background: #ef4444; color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 2rem; cursor: pointer; font-weight: 600; margin: 0.25rem; }
+    .btn-danger:hover { background: #dc2626; }
+    .user-modal-section { margin: 1rem 0; padding: 1rem; background: #f8fafc; border-radius: 1rem; }
+    .user-modal-section h4 { color: #1e4a76; margin-bottom: 0.5rem; font-size: 0.9rem; }
+    .cache-info { display: inline-block; padding: 0.2rem 0.8rem; border-radius: 2rem; font-size: 0.7rem; font-weight: 600; margin-top: 0.5rem; }
+    .cache-ok { background: #d1fae5; color: #065f46; }
+    .cache-missing { background: #fee2e2; color: #991b1b; }
     .item-detail-title { background: #f1f5f9; padding: 0.8rem; border-radius: 1rem; margin-bottom: 1.2rem; }
     .pdf-group { margin-bottom: 1.2rem; }
     .pdf-group-title { font-weight: 600; font-size: 0.9rem; border-left: 3px solid #3b82f6; padding-left: 0.6rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
@@ -106,13 +117,7 @@
     .inactive-message { background: #fee2e2; color: #991b1b; padding: 0.5rem; border-radius: 0.5rem; margin-bottom: 1rem; text-align: center; font-size: 0.8rem; }
     .offline-badge { background: #f59e0b; color: white; padding: 0.2rem 0.8rem; border-radius: 2rem; font-size: 0.7rem; font-weight: 600; margin-left: 1rem; }
     .online-badge { background: #10b981; color: white; padding: 0.2rem 0.8rem; border-radius: 2rem; font-size: 0.7rem; font-weight: 600; margin-left: 1rem; }
-    .btn-offline-prepare { position: fixed; bottom: 80px; right: 20px; background: #4f46e5; color: white; border: none; border-radius: 50px; padding: 10px 15px; font-size: 12px; cursor: pointer; z-index: 10; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-    .btn-offline-prepare:hover { background: #4338ca; transform: scale(1.02); }
-    .btn-clear-cache { position: fixed; bottom: 140px; right: 20px; background: #dc2626; color: white; border: none; border-radius: 50px; padding: 10px 15px; font-size: 12px; cursor: pointer; z-index: 10; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-    .btn-clear-cache:hover { background: #b91c1c; transform: scale(1.02); }
-    .cache-status { position: fixed; bottom: 20px; left: 20px; background: #1e293b; color: white; padding: 5px 10px; border-radius: 20px; font-size: 10px; font-family: monospace; z-index: 10; }
     .sync-status { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 4px 8px; border-radius: 20px; font-size: 10px; z-index: 10; display: none; }
-    @media (max-width: 640px) { body { padding: 1rem; } .fab { bottom: 1rem; right: 1rem; } .btn-offline-prepare { bottom: 70px; right: 10px; font-size: 10px; padding: 6px 12px; } .btn-clear-cache { bottom: 120px; right: 10px; font-size: 10px; padding: 6px 12px; } .cache-status { bottom: 10px; left: 10px; font-size: 8px; } }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
@@ -130,11 +135,35 @@
   </div>
 </div>
 
-<div id="logoutModal" class="modal">
+<!-- MODAL DO USUÁRIO (COM BOTÕES DE MANUTENÇÃO) -->
+<div id="userModal" class="modal">
   <div class="modal-content logout-modal-content">
-    <div class="modal-header"><h2>🔓 Sair do Sistema</h2><button class="close-modal" id="closeLogoutModalBtn">&times;</button></div>
-    <p>Tem certeza que deseja sair?</p>
-    <div class="logout-buttons"><button class="btn-cancel-logout" id="cancelLogoutBtn">Cancelar</button><button class="btn-confirm" id="confirmLogoutBtn">Sair</button></div>
+    <div class="modal-header">
+      <h2>👤 Menu do Usuário</h2>
+      <button class="close-modal" id="closeUserModalBtn">&times;</button>
+    </div>
+    
+    <div class="user-modal-section">
+      <h4>📊 Status do Cache</h4>
+      <div id="userModalCacheStatus" class="cache-info cache-missing">Verificando...</div>
+    </div>
+    
+    <div class="user-modal-section">
+      <h4>🛠️ Manutenção</h4>
+      <button class="btn-primary" id="userModalPrepareBtn">📥 Preparar Modo Offline</button>
+      <button class="btn-warning" id="userModalSyncBtn">🔄 Sincronizar Agora</button>
+      <button class="btn-danger" id="userModalClearCacheBtn">🗑️ Limpar Cache Offline</button>
+    </div>
+    
+    <div class="user-modal-section">
+      <h4>👤 Conta</h4>
+      <p style="font-size: 0.9rem; margin-bottom: 1rem;">Usuário: <strong id="userModalUserName"></strong></p>
+      <button class="btn-confirm" id="userModalLogoutBtn">🔓 Sair do Sistema</button>
+    </div>
+    
+    <div class="logout-buttons">
+      <button class="btn-cancel-logout" id="cancelUserModalBtn">Fechar</button>
+    </div>
   </div>
 </div>
 
@@ -160,10 +189,6 @@
 
 <div id="itemsContainer" class="items-grid"></div>
 <button class="fab" id="addItemBtn">+</button>
-<button class="btn-offline-prepare" id="prepareOfflineBtn">📥 Preparar Modo Offline</button>
-<button class="btn-clear-cache" id="clearCacheBtn">🗑️ Limpar Cache Offline</button>
-<div class="cache-status" id="cacheStatus">🔍 Verificando cache...</div>
-<div class="sync-status" id="syncStatus"></div>
 
 <div id="createItemModal" class="modal">
   <div class="modal-content">
@@ -205,6 +230,8 @@
   <div class="loader-text">🔃 Processando, aguarde...</div>
 </div>
 
+<div class="sync-status" id="syncStatus"></div>
+
 <script>
   (function() {
     // ==================== CONFIGURAÇÕES INICIAIS ====================
@@ -245,15 +272,14 @@
           resolve(dbInstance);
           return;
         }
-        const request = indexedDB.open(DB_NAME_OFFLINE, 15);
+        const request = indexedDB.open(DB_NAME_OFFLINE, 16);
         request.onerror = (event) => {
           console.error('IndexedDB erro:', event);
           reject(request.error);
         };
         request.onsuccess = (event) => {
           dbInstance = request.result;
-          console.log('IndexedDB aberto com sucesso - versão 15');
-          updateCacheStatus();
+          console.log('IndexedDB aberto com sucesso - versão 16');
           resolve(dbInstance);
         };
         request.onupgradeneeded = (event) => {
@@ -281,9 +307,9 @@
       });
     }
 
-    // ==================== UPDATE CACHE STATUS ====================
-    async function updateCacheStatus() {
-      const statusDiv = document.getElementById('cacheStatus');
+    // ==================== UPDATE CACHE STATUS NO MODAL ====================
+    async function updateUserModalCacheStatus() {
+      const statusDiv = document.getElementById('userModalCacheStatus');
       try {
         const db = await initOfflineDB();
         const tx = db.transaction(STORE_MODELO_PDF, 'readonly');
@@ -293,15 +319,16 @@
           request.onsuccess = () => resolve(request.result);
         });
         if (result && result.data) {
-          statusDiv.innerHTML = '✅ PDF Cacheado ✓';
-          statusDiv.style.background = '#10b981';
+          const sizeMB = (result.data.byteLength / (1024 * 1024)).toFixed(2);
+          statusDiv.innerHTML = `✅ PDF Cacheado ✓ (${sizeMB} MB)`;
+          statusDiv.className = 'cache-info cache-ok';
         } else {
-          statusDiv.innerHTML = '⚠️ PDF não cacheado';
-          statusDiv.style.background = '#f59e0b';
+          statusDiv.innerHTML = '⚠️ PDF não cacheado - Clique em "Preparar Modo Offline"';
+          statusDiv.className = 'cache-info cache-missing';
         }
       } catch(e) {
-        statusDiv.innerHTML = '❌ Erro no cache';
-        statusDiv.style.background = '#ef4444';
+        statusDiv.innerHTML = '❌ Erro ao verificar cache';
+        statusDiv.className = 'cache-info cache-missing';
       }
     }
 
@@ -389,25 +416,14 @@
       }
     }
 
-    // ==================== PREPARAR MODO OFFLINE AUTOMÁTICO ====================
-    async function prepararModoOfflineAutomatico() {
-      console.log('🔄 Verificando necessidade de preparar modo offline...');
-      
-      const modeloCacheado = await isModeloCacheado();
-      if (modeloCacheado) {
-        console.log('✅ Modo offline já está pronto');
-        return true;
-      }
-      
-      if (!navigator.onLine) {
-        console.log('⚠️ Offline - não é possível preparar modo offline agora');
-        return false;
-      }
-      
-      console.log('📥 Preparando modo offline automaticamente...');
-      showSyncStatus('📥 Preparando modo offline...');
+    // ==================== PREPARAR MODO OFFLINE ====================
+    async function forcarCacheModeloPDF() {
+      const loader = document.getElementById('fullscreenLoader');
+      loader.classList.add('active');
       
       try {
+        console.log('📥 Preparando modo offline...');
+        
         const response = await fetch(MODELO_PDF_URL);
         if (!response.ok) throw new Error('Falha ao baixar modelo');
         const buffer = await response.arrayBuffer();
@@ -429,77 +445,105 @@
         await new Promise((resolve) => { tx.oncomplete = () => resolve(); });
         
         cachedModeloPDF = buffer;
-        await updateCacheStatus();
+        await updateUserModalCacheStatus();
         
-        console.log('✅ Modo offline preparado automaticamente');
+        console.log('✅ Modo offline preparado com sucesso!');
         showSyncStatus('✅ Modo offline pronto!');
-        return true;
+        alert('✅ Modo offline preparado com sucesso!\n\nAgora você pode usar o sistema sem internet.');
         
       } catch (error) {
-        console.error('❌ Erro ao preparar modo offline automaticamente:', error);
-        showSyncStatus('⚠️ Falha ao preparar offline', true);
-        return false;
+        console.error('❌ Erro ao preparar modo offline:', error);
+        alert('Erro ao preparar modo offline: ' + error.message);
+      } finally {
+        loader.classList.remove('active');
       }
     }
 
-    // ==================== ROTINA COMPLETA DE SINCRONIZAÇÃO E PREPARAÇÃO ====================
-    async function rotinaCompletaSincronizacao() {
+    // ==================== ROTINA DE SINCRONIZAÇÃO ====================
+    async function sincronizarItensPendentes() {
+      const pendentes = await getPendingItems();
+      if (pendentes.length === 0) return 0;
+      
+      console.log(`📤 Sincronizando ${pendentes.length} itens pendentes...`);
+      let sucessos = 0;
+      
+      for (const item of pendentes) {
+        try {
+          const { data: existing, error: checkError } = await supabase.from('items').select('id').eq('code', item.code).maybeSingle();
+          if (checkError) throw checkError;
+          
+          if (existing) {
+            await removerItemPending(item.id);
+            continue;
+          }
+          
+          const { data, error } = await supabase.from('items').insert({
+            name: item.name, sub_localizacao: item.sub_localizacao, tamanho: item.tamanho,
+            code: item.code, status: 'active'
+          }).select().single();
+          
+          if (error) throw error;
+          await removerItemPending(item.id);
+          sucessos++;
+          console.log(`✅ Item ${item.name} sincronizado`);
+        } catch (error) { console.error(`❌ Erro ao sincronizar item:`, error); }
+      }
+      return sucessos;
+    }
+
+    async function sincronizarInspecoesPendentes() {
+      const pendentes = await getPendingInspections();
+      if (pendentes.length === 0) return 0;
+      
+      console.log(`📤 Sincronizando ${pendentes.length} inspeções pendentes...`);
+      let sucessos = 0;
+      
+      for (const item of pendentes) {
+        try {
+          const pdfBlob = base64ToBlob(item.pdfBase64, 'application/pdf');
+          const pdfFile = new File([pdfBlob], `checklist_${item.monthName}_${Date.now()}.pdf`, { type: 'application/pdf' });
+          
+          let fotoFile = null;
+          if (item.fotoBase64) {
+            const fotoBlob = base64ToBlob(item.fotoBase64, 'image/jpeg');
+            fotoFile = new File([fotoBlob], `foto_${Date.now()}.jpg`, { type: 'image/jpeg' });
+          }
+          
+          await addFileToItem(item.itemId, item.category, pdfFile, item.formData.data_inspecao);
+          await removerInspecaoPending(item.id);
+          sucessos++;
+          console.log(`✅ Inspeção ${item.id} sincronizada`);
+        } catch (error) { console.error(`❌ Erro ao sincronizar inspeção:`, error); }
+      }
+      return sucessos;
+    }
+
+    async function rotinaSincronizacao() {
       if (!navigator.onLine) {
-        console.log('📡 Offline - pulando rotina de sincronização');
-        return;
+        console.log('📡 Offline - pulando sincronização');
+        return false;
       }
       
       const loader = document.getElementById('fullscreenLoader');
-      let loaderAtivo = false;
+      loader.classList.add('active');
+      let mensagens = [];
       
       try {
-        // Verificar se há pendentes
-        const pendentesItems = await getPendingItems();
-        const pendentesInsp = await getPendingInspections();
-        const totalPendentes = pendentesItems.length + pendentesInsp.length;
+        const itensSincronizados = await sincronizarItensPendentes();
+        if (itensSincronizados > 0) mensagens.push(`${itensSincronizados} item(ns) sincronizado(s)`);
         
-        if (totalPendentes > 0) {
-          console.log(`🔄 Encontrados ${totalPendentes} itens pendentes. Iniciando sincronização...`);
-          showSyncStatus(`🔄 Sincronizando ${totalPendentes} itens...`);
-          loader.classList.add('active');
-          loaderAtivo = true;
-          
-          // Sincronizar itens pendentes
-          const itensSincronizados = await sincronizarItensPendentes();
-          const inspSincronizadas = await sincronizarInspecoesPendentes();
-          
-          if (itensSincronizados > 0 || inspSincronizadas > 0) {
-            console.log(`✅ Sincronizados: ${itensSincronizados} itens, ${inspSincronizadas} inspeções`);
-            showSyncStatus(`✅ ${itensSincronizados + inspSincronizadas} itens sincronizados!`);
-            
-            // Limpar pendentes após sincronização
-            await limparPendentesAposSincronizacao();
-            
-            // Recarregar dados
-            await refreshData();
-            
-            // Pequena pausa
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-        } else {
-          console.log('✅ Nenhum item pendente para sincronizar');
+        const inspSincronizadas = await sincronizarInspecoesPendentes();
+        if (inspSincronizadas > 0) mensagens.push(`${inspSincronizadas} inspeção(ões) sincronizada(s)`);
+        
+        if (mensagens.length > 0) {
+          await limparPendentesAposSincronizacao();
+          await refreshData();
+          showSyncStatus(`✅ ${mensagens.join(', ')}`);
+          return true;
         }
-        
-        // Verificar e preparar modo offline automaticamente
-        const modeloPreparado = await prepararModoOfflineAutomatico();
-        
-        if (modeloPreparado && totalPendentes === 0) {
-          console.log('✅ Sistema pronto para uso offline');
-        }
-        
-      } catch (error) {
-        console.error('❌ Erro na rotina de sincronização:', error);
-        showSyncStatus('❌ Erro na sincronização', true);
-      } finally {
-        if (loaderAtivo) {
-          loader.classList.remove('active');
-        }
-      }
+        return false;
+      } catch (error) { console.error('Erro na sincronização:', error); return false;
+      } finally { loader.classList.remove('active'); }
     }
 
     // ==================== VERIFICAR SE MODELO ESTÁ CACHEADO ====================
@@ -534,7 +578,7 @@
         
         if (result && result.data) {
           cachedModeloPDF = result.data;
-          console.log('✅ Modelo PDF carregado do IndexedDB, tamanho:', cachedModeloPDF.byteLength);
+          console.log('✅ Modelo PDF carregado do IndexedDB');
           return cachedModeloPDF;
         }
       } catch(e) {
@@ -542,11 +586,11 @@
       }
       
       if (!navigator.onLine) {
-        throw new Error('Modelo PDF não está em cache e você está offline. Aguarde a sincronização automática quando a internet voltar.');
+        throw new Error('Modelo PDF não está em cache e você está offline');
       }
       
       try {
-        console.log('📥 Baixando modelo PDF do Supabase...');
+        console.log('📥 Baixando modelo PDF...');
         const response = await fetch(MODELO_PDF_URL);
         if (!response.ok) throw new Error('Falha ao baixar modelo');
         const buffer = await response.arrayBuffer();
@@ -562,9 +606,7 @@
           req.onerror = () => reject(req.error);
         });
         
-        await updateCacheStatus();
-        console.log('✅ Modelo PDF salvo no IndexedDB, tamanho:', buffer.byteLength);
-        
+        console.log('✅ Modelo PDF salvo');
         return buffer;
       } catch (error) {
         console.error('Erro ao carregar modelo PDF:', error);
@@ -720,77 +762,6 @@
       });
     }
 
-    // ==================== TESTE DE CONEXÃO ====================
-    async function testarConexao() {
-      if (!navigator.onLine) return false;
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        await fetch('https://www.google.com', { method: 'HEAD', signal: controller.signal, mode: 'no-cors' });
-        clearTimeout(timeoutId);
-        return true;
-      } catch (error) { return navigator.onLine; }
-    }
-
-    // ==================== SINCRONIZAÇÃO ====================
-    async function sincronizarItensPendentes() {
-      const pendentes = await getPendingItems();
-      if (pendentes.length === 0) return 0;
-      
-      console.log(`📤 Sincronizando ${pendentes.length} itens pendentes...`);
-      let sucessos = 0;
-      
-      for (const item of pendentes) {
-        try {
-          const { data: existing, error: checkError } = await supabase.from('items').select('id').eq('code', item.code).maybeSingle();
-          if (checkError) throw checkError;
-          
-          if (existing) {
-            await removerItemPending(item.id);
-            continue;
-          }
-          
-          const { data, error } = await supabase.from('items').insert({
-            name: item.name, sub_localizacao: item.sub_localizacao, tamanho: item.tamanho,
-            code: item.code, status: 'active'
-          }).select().single();
-          
-          if (error) throw error;
-          await removerItemPending(item.id);
-          sucessos++;
-          console.log(`✅ Item ${item.name} sincronizado`);
-        } catch (error) { console.error(`❌ Erro ao sincronizar item:`, error); }
-      }
-      return sucessos;
-    }
-
-    async function sincronizarInspecoesPendentes() {
-      const pendentes = await getPendingInspections();
-      if (pendentes.length === 0) return 0;
-      
-      console.log(`📤 Sincronizando ${pendentes.length} inspeções pendentes...`);
-      let sucessos = 0;
-      
-      for (const item of pendentes) {
-        try {
-          const pdfBlob = base64ToBlob(item.pdfBase64, 'application/pdf');
-          const pdfFile = new File([pdfBlob], `checklist_${item.monthName}_${Date.now()}.pdf`, { type: 'application/pdf' });
-          
-          let fotoFile = null;
-          if (item.fotoBase64) {
-            const fotoBlob = base64ToBlob(item.fotoBase64, 'image/jpeg');
-            fotoFile = new File([fotoBlob], `foto_${Date.now()}.jpg`, { type: 'image/jpeg' });
-          }
-          
-          await addFileToItem(item.itemId, item.category, pdfFile, item.formData.data_inspecao);
-          await removerInspecaoPending(item.id);
-          sucessos++;
-          console.log(`✅ Inspeção ${item.id} sincronizada`);
-        } catch (error) { console.error(`❌ Erro ao sincronizar inspeção:`, error); }
-      }
-      return sucessos;
-    }
-
     function blobToBase64(blob) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -806,6 +777,18 @@
       for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
       const byteArray = new Uint8Array(byteNumbers);
       return new Blob([byteArray], { type: mimeType });
+    }
+
+    // ==================== TESTE DE CONEXÃO ====================
+    async function testarConexao() {
+      if (!navigator.onLine) return false;
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        await fetch('https://www.google.com', { method: 'HEAD', signal: controller.signal, mode: 'no-cors' });
+        clearTimeout(timeoutId);
+        return true;
+      } catch (error) { return navigator.onLine; }
     }
 
     // ==================== STATUS DE CONEXÃO ====================
@@ -838,21 +821,58 @@
     } catch(e) { console.warn(e); }
     
     const userInfoDisplay = document.getElementById('userInfoDisplay');
-    if (currentUser && currentUser.username) userInfoDisplay.innerHTML = `👤 ${currentUser.username}`;
-    else { userInfoDisplay.innerHTML = `👤 Não logado`; window.location.href = 'index.html'; return; }
+    if (currentUser && currentUser.username) {
+      userInfoDisplay.innerHTML = `👤 ${currentUser.username}`;
+      document.getElementById('userModalUserName').innerText = currentUser.username;
+    } else { 
+      userInfoDisplay.innerHTML = `👤 Não logado`; 
+      window.location.href = 'index.html';
+      return; 
+    }
 
-    // Modal de logout
-    const logoutModal = document.getElementById('logoutModal');
-    const closeLogoutModalBtn = document.getElementById('closeLogoutModalBtn');
-    const cancelLogoutBtn = document.getElementById('cancelLogoutBtn');
-    const confirmLogoutBtn = document.getElementById('confirmLogoutBtn');
-    
-    userInfoDisplay.addEventListener('click', () => { logoutModal.style.display = 'flex'; });
-    function closeLogoutModal() { logoutModal.style.display = 'none'; }
-    closeLogoutModalBtn.addEventListener('click', closeLogoutModal);
-    cancelLogoutBtn.addEventListener('click', closeLogoutModal);
-    confirmLogoutBtn.addEventListener('click', () => { localStorage.removeItem('tendex_current_user'); window.location.href = 'index.html'; });
-    logoutModal.addEventListener('click', (e) => { if (e.target === logoutModal) closeLogoutModal(); });
+    // ==================== MODAL DO USUÁRIO ====================
+    const userModal = document.getElementById('userModal');
+    const closeUserModalBtn = document.getElementById('closeUserModalBtn');
+    const cancelUserModalBtn = document.getElementById('cancelUserModalBtn');
+    const userModalPrepareBtn = document.getElementById('userModalPrepareBtn');
+    const userModalSyncBtn = document.getElementById('userModalSyncBtn');
+    const userModalClearCacheBtn = document.getElementById('userModalClearCacheBtn');
+    const userModalLogoutBtn = document.getElementById('userModalLogoutBtn');
+
+    // Abrir modal ao clicar no usuário
+    userInfoDisplay.addEventListener('click', async () => {
+      await updateUserModalCacheStatus();
+      userModal.style.display = 'flex';
+    });
+
+    function closeUserModal() { userModal.style.display = 'none'; }
+    closeUserModalBtn.addEventListener('click', closeUserModal);
+    cancelUserModalBtn.addEventListener('click', closeUserModal);
+    userModal.addEventListener('click', (e) => { if (e.target === userModal) closeUserModal(); });
+
+    // Botões do modal
+    userModalPrepareBtn.addEventListener('click', async () => {
+      closeUserModal();
+      await forcarCacheModeloPDF();
+    });
+
+    userModalSyncBtn.addEventListener('click', async () => {
+      closeUserModal();
+      showSyncStatus('🔄 Sincronizando...');
+      await rotinaSincronizacao();
+      await refreshData();
+      showSyncStatus('✅ Sincronização concluída!');
+    });
+
+    userModalClearCacheBtn.addEventListener('click', () => {
+      closeUserModal();
+      limparCacheOffline();
+    });
+
+    userModalLogoutBtn.addEventListener('click', () => {
+      localStorage.removeItem('tendex_current_user');
+      window.location.href = 'index.html';
+    });
 
     const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
     const monthKeys = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -1130,7 +1150,7 @@
     async function generateAndAttachPdf(itemId, category, monthName, formData, itemInfo, fotoFile) {
       const temModelo = await isModeloCacheado();
       if (!temModelo && !navigator.onLine) {
-        alert('❌ Modo offline não disponível!\n\nO modelo PDF não está cacheado.\n\nAguarde a sincronização automática quando a internet voltar.');
+        alert('❌ Modo offline não disponível!\n\nO modelo PDF não está cacheado.\n\nClique no seu usuário > "Preparar Modo Offline" quando tiver internet.');
         return;
       }
       
@@ -1424,16 +1444,11 @@
     }
 
     document.getElementById('addItemBtn').addEventListener('click', openCreateModal);
-    document.getElementById('prepareOfflineBtn').addEventListener('click', async () => {
-      await rotinaCompletaSincronizacao();
-      alert('✅ Rotina de sincronização e preparação offline concluída!');
-    });
-    document.getElementById('clearCacheBtn').addEventListener('click', limparCacheOffline);
     document.getElementById('searchInput').addEventListener('input', (e) => renderCards(e.target.value));
     const monthContainer = document.getElementById('monthButtonsContainer');
     monthNames.forEach((month, idx) => { const btn = document.createElement('button'); btn.className = 'month-btn'; btn.textContent = month; btn.addEventListener('click', () => downloadMonthPDFs(monthKeys[idx], month)); monthContainer.appendChild(btn); });
     
-    // ==================== INICIALIZAÇÃO COM ROTINA AUTOMÁTICA ====================
+    // ==================== INICIALIZAÇÃO ====================
     let inicializacaoCompleta = false;
     
     window.addEventListener('DOMContentLoaded', async () => {
@@ -1441,31 +1456,40 @@
       await initOfflineDB();
       await limparDadosSincronizados();
       
-      // Carregar dados primeiro
       await refreshData();
       
-      // Executar rotina completa de sincronização e preparação offline
-      console.log('🔄 Executando rotina automática de sincronização...');
-      await rotinaCompletaSincronizacao();
+      // Verificar se precisa baixar o modelo PDF
+      const modeloCacheado = await isModeloCacheado();
+      if (!modeloCacheado && navigator.onLine) {
+        console.log('📥 Baixando modelo PDF...');
+        try {
+          await carregarModeloPDF();
+          await updateUserModalCacheStatus();
+        } catch(e) { console.error('Erro ao baixar modelo:', e); }
+      }
+      
+      // Sincronizar pendentes se estiver online
+      if (navigator.onLine) {
+        await rotinaSincronizacao();
+      }
       
       inicializacaoCompleta = true;
       console.log('✅ Inicialização concluída!');
-      showSyncStatus('✅ Sistema pronto!', false);
     });
     
-    // Detectar quando voltar online e executar rotina automática
+    // Detectar quando voltar online
     let syncScheduled = false;
     window.addEventListener('online', async () => {
       if (!inicializacaoCompleta) return;
       
-      console.log('🌐 Conexão detectada, aguardando estabilização...');
-      showSyncStatus('🔄 Verificando conexão...');
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      console.log('🌐 Conexão detectada!');
+      showSyncStatus('🔄 Sincronizando...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      if (await testarConexao() && !syncScheduled) { 
+      if (!syncScheduled) { 
         syncScheduled = true; 
-        console.log('📡 Conexão estável! Executando rotina automática...');
-        await rotinaCompletaSincronizacao();
+        await rotinaSincronizacao();
+        await updateUserModalCacheStatus();
         syncScheduled = false; 
       }
     });
