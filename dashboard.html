@@ -313,14 +313,14 @@
           resolve(dbInstance);
           return;
         }
-        const request = indexedDB.open(DB_NAME_OFFLINE, 17);
+        const request = indexedDB.open(DB_NAME_OFFLINE, 18);
         request.onerror = (event) => {
           console.error('IndexedDB erro:', event);
           reject(request.error);
         };
         request.onsuccess = (event) => {
           dbInstance = request.result;
-          console.log('IndexedDB aberto com sucesso - versão 17');
+          console.log('IndexedDB aberto com sucesso - versão 18');
           resolve(dbInstance);
         };
         request.onupgradeneeded = (event) => {
@@ -400,7 +400,22 @@
       container.innerHTML = html;
     }
 
-    // ==================== MODAL DE SINCRONIZAÇÃO DETALHADA ====================
+    // ==================== MAPEAR IDS DOS ITENS SINCRONIZADOS ====================
+    async function mapearIdsItensSincronizados() {
+      // Buscar todos os itens do servidor para mapear código -> ID real
+      const { data: items, error } = await supabase.from('items').select('id, code');
+      if (error) {
+        console.error('Erro ao buscar itens:', error);
+        return {};
+      }
+      const mapa = {};
+      items.forEach(item => {
+        mapa[item.code] = item.id;
+      });
+      return mapa;
+    }
+
+    // ==================== MODAL DE SINCRONIZAÇÃO DETALHADA (ORDEM CORRETA) ====================
     async function mostrarModalSincronizacao() {
       const syncModal = document.getElementById('syncModal');
       const syncModalList = document.getElementById('syncModalList');
@@ -419,6 +434,7 @@
       syncModalProgress.style.width = '0%';
       
       let html = `<p><strong>📊 Total de itens a sincronizar: ${total}</strong></p>`;
+      html += `<p style="color: #f59e0b; font-size: 0.8rem;">⚠️ Itens serão sincronizados primeiro, depois as inspeções</p>`;
       html += `<div style="margin: 1rem 0;"><strong>📦 Itens (${pendentesItems.length}):</strong></div>`;
       
       for (const item of pendentesItems) {
@@ -439,7 +455,7 @@
       
       syncModalList.innerHTML = html;
       
-      // Iniciar sincronização
+      // Iniciar sincronização na ordem correta
       await sincronizarComProgresso();
       
       setTimeout(() => {
@@ -447,71 +463,151 @@
       }, 2000);
     }
 
-    // ==================== SINCRONIZAR COM PROGRESSO ====================
+    // ==================== SINCRONIZAR COM PROGRESSO (ORDEM CORRETA) ====================
     async function sincronizarComProgresso() {
       const syncModalProgress = document.getElementById('syncModalProgress');
       const pendentesItems = await getPendingItems();
       const pendentesInsp = await getPendingInspections();
       const total = pendentesItems.length + pendentesInsp.length;
       let concluidos = 0;
+      let erros = 0;
+      
+      // Mapa para armazenar a relação entre código local e ID real no servidor
+      const mapaIds = {};
       
       function atualizarProgresso(sucesso) {
         concluidos++;
         const percent = (concluidos / total) * 100;
-        syncModalProgress.style.width = `${percent}%`;
+        if (syncModalProgress) syncModalProgress.style.width = `${percent}%`;
       }
       
-      // Sincronizar itens
+      // ==================== FASE 1: SINCRONIZAR ITENS PRIMEIRO ====================
+      console.log('📦 FASE 1: Sincronizando itens...');
+      
       for (const item of pendentesItems) {
         try {
           const element = document.getElementById(`sync-item-${item.id}`);
           if (element) {
-            element.querySelector('span:last-child').innerHTML = '<span style="color: #f59e0b;">🔄 Sincronizando...</span>';
+            element.querySelector('span:last-child').innerHTML = '<span style="color: #f59e0b;">🔄 Verificando...</span>';
           }
           
-          const { data: existing, error: checkError } = await supabase.from('items').select('id').eq('code', item.code).maybeSingle();
+          // Verificar se já existe no servidor
+          const { data: existing, error: checkError } = await supabase
+            .from('items')
+            .select('id, code')
+            .eq('code', item.code)
+            .maybeSingle();
+          
           if (checkError) throw checkError;
           
+          // Se já existe, mapear o ID e remover pendente
           if (existing) {
-            await removerItemPending(item.id);
+            mapaIds[item.code] = existing.id;
             if (element) {
-              element.querySelector('span:last-child').innerHTML = '<span style="color: #10b981;">✅ Já existe no servidor</span>';
+              element.querySelector('span:last-child').innerHTML = '<span style="color: #10b981;">✅ Já existe no servidor (ID: ' + existing.id + ')</span>';
               element.style.background = '#d1fae5';
             }
+            await removerItemPending(item.id);
             atualizarProgresso(true);
+            console.log(`⚠️ Item com código ${item.code} já existe, ID mapeado: ${existing.id}`);
             continue;
           }
           
-          const { data, error } = await supabase.from('items').insert({
-            name: item.name, sub_localizacao: item.sub_localizacao, tamanho: item.tamanho,
-            code: item.code, status: 'active'
+          // Se não existe, criar
+          if (element) {
+            element.querySelector('span:last-child').innerHTML = '<span style="color: #f59e0b;">🔄 Criando item...</span>';
+          }
+          
+          const { data: newItem, error: insertError } = await supabase.from('items').insert({
+            name: item.name,
+            sub_localizacao: item.sub_localizacao || '',
+            tamanho: item.tamanho || '',
+            code: item.code,
+            status: 'active'
           }).select().single();
           
-          if (error) throw error;
+          if (insertError) {
+            if (insertError.code === '23505') {
+              // Duplicado - tentar buscar novamente
+              const { data: existingAgain } = await supabase
+                .from('items')
+                .select('id')
+                .eq('code', item.code)
+                .single();
+              if (existingAgain) {
+                mapaIds[item.code] = existingAgain.id;
+                if (element) {
+                  element.querySelector('span:last-child').innerHTML = '<span style="color: #10b981;">✅ Código já existia (ID: ' + existingAgain.id + ')</span>';
+                  element.style.background = '#d1fae5';
+                }
+                await removerItemPending(item.id);
+                atualizarProgresso(true);
+                continue;
+              }
+            }
+            throw insertError;
+          }
+          
+          // Mapear o novo ID
+          mapaIds[item.code] = newItem.id;
           await removerItemPending(item.id);
           
           if (element) {
-            element.querySelector('span:last-child').innerHTML = '<span style="color: #10b981;">✅ Sincronizado!</span>';
+            element.querySelector('span:last-child').innerHTML = '<span style="color: #10b981;">✅ Sincronizado! (ID: ' + newItem.id + ')</span>';
             element.style.background = '#d1fae5';
           }
           atualizarProgresso(true);
+          console.log(`✅ Item ${item.name} sincronizado com ID: ${newItem.id}`);
+          
         } catch (error) {
-          console.error(`Erro ao sincronizar item:`, error);
+          console.error(`❌ Erro ao sincronizar item:`, error);
+          erros++;
           const element = document.getElementById(`sync-item-${item.id}`);
           if (element) {
-            element.querySelector('span:last-child').innerHTML = `<span style="color: #ef4444;">❌ Erro: ${error.message}</span>`;
+            let errorMsg = error.message || 'Erro desconhecido';
+            if (errorMsg.includes('duplicate') || errorMsg.includes('unique')) {
+              errorMsg = 'Código duplicado - item já existe';
+            }
+            element.querySelector('span:last-child').innerHTML = `<span style="color: #ef4444;">❌ ${errorMsg.substring(0, 50)}</span>`;
             element.style.background = '#fee2e2';
           }
           atualizarProgresso(false);
         }
       }
       
-      // Sincronizar inspeções
+      // ==================== FASE 2: SINCRONIZAR INSPEÇÕES ====================
+      console.log('📋 FASE 2: Sincronizando inspeções...');
+      
       for (const insp of pendentesInsp) {
         try {
           const element = document.getElementById(`sync-insp-${insp.id}`);
           if (element) {
-            element.querySelector('span:last-child').innerHTML = '<span style="color: #f59e0b;">🔄 Sincronizando...</span>';
+            element.querySelector('span:last-child').innerHTML = '<span style="color: #f59e0b;">🔄 Verificando item pai...</span>';
+          }
+          
+          // Buscar o ID real do item no servidor
+          let itemIdReal = mapaIds[insp.itemInfo?.code];
+          
+          if (!itemIdReal) {
+            // Tentar buscar pelo código do item
+            const { data: itemData, error: itemError } = await supabase
+              .from('items')
+              .select('id')
+              .eq('code', insp.itemInfo?.code)
+              .maybeSingle();
+            
+            if (itemError) throw itemError;
+            
+            if (itemData) {
+              itemIdReal = itemData.id;
+              mapaIds[insp.itemInfo.code] = itemIdReal;
+            } else {
+              throw new Error(`Item pai não encontrado no servidor (Código: ${insp.itemInfo?.code})`);
+            }
+          }
+          
+          if (element) {
+            element.querySelector('span:last-child').innerHTML = '<span style="color: #f59e0b;">🔄 Enviando PDF...</span>';
           }
           
           const pdfBlob = base64ToBlob(insp.pdfBase64, 'application/pdf');
@@ -523,7 +619,8 @@
             fotoFile = new File([fotoBlob], `foto_${Date.now()}.jpg`, { type: 'image/jpeg' });
           }
           
-          await addFileToItem(insp.itemId, insp.category, pdfFile, insp.formData.data_inspecao);
+          // Usar o ID real do item para anexar o arquivo
+          await addFileToItem(itemIdReal, insp.category, pdfFile, insp.formData.data_inspecao);
           await removerInspecaoPending(insp.id);
           
           if (element) {
@@ -531,11 +628,18 @@
             element.style.background = '#d1fae5';
           }
           atualizarProgresso(true);
+          console.log(`✅ Inspeção para item ${insp.itemInfo?.code} sincronizada`);
+          
         } catch (error) {
-          console.error(`Erro ao sincronizar inspeção:`, error);
+          console.error(`❌ Erro ao sincronizar inspeção:`, error);
+          erros++;
           const element = document.getElementById(`sync-insp-${insp.id}`);
           if (element) {
-            element.querySelector('span:last-child').innerHTML = `<span style="color: #ef4444;">❌ Erro: ${error.message}</span>`;
+            let errorMsg = error.message || 'Erro desconhecido';
+            if (errorMsg.includes('foreign key')) {
+              errorMsg = 'Item pai não sincronizado - sincronize os itens primeiro';
+            }
+            element.querySelector('span:last-child').innerHTML = `<span style="color: #ef4444;">❌ ${errorMsg.substring(0, 50)}</span>`;
             element.style.background = '#fee2e2';
           }
           atualizarProgresso(false);
@@ -548,7 +652,14 @@
       await listarPendentesNoModal();
       await updateUserModalCacheStatus();
       
-      showSyncStatus(`✅ Sincronização concluída! ${concluidos}/${total} itens processados.`);
+      const mensagem = `✅ Sincronização concluída! ${concluidos - erros}/${total} itens processados.${erros > 0 ? ` ${erros} erro(s).` : ''}`;
+      showSyncStatus(mensagem, erros > 0);
+      
+      if (erros > 0) {
+        console.warn(`${erros} item(ns) falharam na sincronização`);
+      }
+      
+      return { concluidos, erros };
     }
 
     // ==================== VERIFICAR E SINCRONIZAR PERSISTENTE ====================
@@ -1166,29 +1277,66 @@
     }
 
     async function saveItemComplete(itemId, name, sub_localizacao, tamanho, code, filesToProcess) {
+      // Se estiver online, verificar duplicata no servidor
+      if (navigator.onLine && await testarConexao()) {
+        const { data: existing, error: dupError } = await supabase
+          .from('items')
+          .select('id')
+          .eq('code', code)
+          .maybeSingle();
+        
+        if (dupError) throw dupError;
+        if (existing && existing.id !== itemId) {
+          alert(`❌ O código "${code}" já está em uso no servidor. Use outro código.`);
+          throw new Error(`Código "${code}" já existe no servidor`);
+        }
+      }
+      
+      // Se estiver offline ou falhou a verificação online
       if (!navigator.onLine || !(await testarConexao())) {
+        // Verificar duplicata local
         const itemsLocal = await carregarItemsLocal();
         const existeLocal = itemsLocal.some(i => i.code === code && i.id !== itemId);
-        if (existeLocal) { alert('❌ Este código já existe localmente.'); throw new Error('Código duplicado localmente'); }
         
-        const pendingData = { name, sub_localizacao, tamanho, code, timestamp: new Date().toISOString() };
+        if (existeLocal) {
+          alert('❌ Este código já existe localmente. Aguarde a sincronização ou use outro código.');
+          throw new Error('Código duplicado localmente');
+        }
+        
+        // Salvar como pendente
+        const pendingData = {
+          name: name,
+          sub_localizacao: sub_localizacao || '',
+          tamanho: tamanho || '',
+          code: code,
+          timestamp: new Date().toISOString()
+        };
         await salvarItemPending(pendingData);
         
+        // Criar item local temporário
         const newId = Date.now();
-        const newItem = { id: newId, name, sub_localizacao, tamanho, code, status: 'active', files: [] };
+        const newItem = {
+          id: newId,
+          name: name,
+          sub_localizacao: sub_localizacao || '',
+          tamanho: tamanho || '',
+          code: code,
+          status: 'active',
+          files: [],
+          pending: true
+        };
+        
         const items = await carregarItemsLocal();
         items.push(newItem);
         await salvarItemsLocal(items);
         await refreshData();
         await updatePendingBadge();
+        
         alert('⚠️ Você está offline. O item foi salvo localmente e será sincronizado quando a internet voltar.');
         return newId;
       }
 
-      const { data: existing, error: dupError } = await supabase.from('items').select('id').eq('code', code).maybeSingle();
-      if (dupError) throw dupError;
-      if (existing && existing.id !== itemId) throw new Error(`O código "${code}" já está em uso.`);
-      
+      // Se chegou aqui, está online e sem conflitos
       const uploadedUrls = [];
       for (const item of filesToProcess) {
         if (item.file) {
@@ -1197,31 +1345,75 @@
           const filePath = `itens/${tempId}/${item.category}_${Date.now()}.${fileExt}`;
           await supabase.storage.from(BUCKET).upload(filePath, item.file);
           const { data: publicUrlData } = supabase.storage.from(BUCKET).getPublicUrl(filePath);
-          uploadedUrls.push({ category: item.category, url: publicUrlData.publicUrl, fileName: item.file.name });
-        } else uploadedUrls.push({ category: item.category, url: null });
+          uploadedUrls.push({
+            category: item.category,
+            url: publicUrlData.publicUrl,
+            fileName: item.file.name
+          });
+        } else {
+          uploadedUrls.push({ category: item.category, url: null });
+        }
       }
 
       let itemIdFinal = itemId;
-      const itemData = { name, sub_localizacao, tamanho, code, status: 'active' };
-      if (itemId) await supabase.from('items').update(itemData).eq('id', itemId);
-      else { const { data: newItem } = await supabase.from('items').insert(itemData).select().single(); itemIdFinal = newItem.id; }
+      const itemData = {
+        name: name,
+        sub_localizacao: sub_localizacao || '',
+        tamanho: tamanho || '',
+        code: code,
+        status: 'active'
+      };
+      
+      if (itemId) {
+        await supabase.from('items').update(itemData).eq('id', itemId);
+      } else {
+        const { data: newItem, error: insertError } = await supabase
+          .from('items')
+          .insert(itemData)
+          .select()
+          .single();
+        
+        if (insertError) {
+          if (insertError.code === '23505') {
+            alert(`❌ O código "${code}" já está em uso. Tente outro código.`);
+            throw new Error('Código duplicado no servidor');
+          }
+          throw insertError;
+        }
+        itemIdFinal = newItem.id;
+      }
 
+      // Processar arquivos
       for (const fileInfo of uploadedUrls) {
         if (fileInfo.url) {
-          const { data: existingFile } = await supabase.from('files').select('id, file_url').eq('item_id', itemIdFinal).eq('category', fileInfo.category).maybeSingle();
+          const { data: existingFile } = await supabase
+            .from('files')
+            .select('id, file_url')
+            .eq('item_id', itemIdFinal)
+            .eq('category', fileInfo.category)
+            .maybeSingle();
+          
           if (existingFile) {
             await deleteStorageFile(existingFile.file_url);
             await supabase.from('files').delete().eq('id', existingFile.id);
           }
-          await supabase.from('files').insert({ item_id: itemIdFinal, category: fileInfo.category, file_name: fileInfo.fileName, file_url: fileInfo.url });
+          
+          await supabase.from('files').insert({
+            item_id: itemIdFinal,
+            category: fileInfo.category,
+            file_name: fileInfo.fileName,
+            file_url: fileInfo.url
+          });
         }
       }
       
+      // Atualizar cache local
       const allItems = await supabase.from('items').select('*');
       const allFiles = await supabase.from('files').select('*');
       await salvarItemsLocal(allItems.data || []);
       await salvarFilesLocal(allFiles.data || []);
-      await updatePendingBadge();
+      await refreshData();
+      
       return itemIdFinal;
     }
 
@@ -1329,7 +1521,24 @@
           const pdfBase64 = await blobToBase64(pdfBlob);
           let fotoBase64 = null;
           if (fotoFile) fotoBase64 = await blobToBase64(fotoFile);
-          const pendingData = { type: 'inspecao', itemId, category, monthName, formData, itemInfo: { code: itemInfo.code, tamanho: itemInfo.tamanho, name: itemInfo.name }, pdfBase64, fotoBase64, timestamp: new Date().toISOString() };
+          
+          // Salvar o código do item também para referência
+          const pendingData = {
+            type: 'inspecao',
+            itemId: itemId,
+            category: category,
+            monthName: monthName,
+            formData: formData,
+            itemInfo: {
+              code: itemInfo.code,
+              tamanho: itemInfo.tamanho,
+              name: itemInfo.name,
+              id: itemId
+            },
+            pdfBase64: pdfBase64,
+            fotoBase64: fotoBase64,
+            timestamp: new Date().toISOString()
+          };
           await salvarInspecaoPending(pendingData);
           loader.classList.remove('active');
           await updatePendingBadge();
