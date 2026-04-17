@@ -311,24 +311,24 @@
     // ==================== INICIALIZAR INDEXEDDB ====================
     function initOfflineDB() {
       return new Promise((resolve, reject) => {
-        if (dbInstance && dbInstance.version >= 24) {
+        if (dbInstance && dbInstance.version >= 25) {
           resolve(dbInstance);
           return;
         }
-        const request = indexedDB.open(DB_NAME_OFFLINE, 24);
+        const request = indexedDB.open(DB_NAME_OFFLINE, 25);
         request.onerror = (event) => {
           console.error('IndexedDB erro:', event);
           reject(request.error);
         };
         request.onsuccess = (event) => {
           dbInstance = request.result;
-          console.log('IndexedDB aberto com sucesso - versão 24');
+          console.log('IndexedDB aberto com sucesso - versão 25');
           verificarPersistenciaDados();
           resolve(dbInstance);
         };
         request.onupgradeneeded = (event) => {
           const db = event.target.result;
-          console.log('Criando stores versão 24...');
+          console.log('Criando stores versão 25...');
           
           const storesToRemove = ['items_cache', 'files_cache', 'pending_items', 'pending_inspections', 'modelo_pdf', 'sync_log'];
           for (const store of storesToRemove) {
@@ -542,7 +542,6 @@
       try {
         const db = await initOfflineDB();
         
-        // Limpar apenas os pendentes que já foram sincronizados
         const tx1 = db.transaction(STORE_PENDING_ITEMS, 'readwrite');
         await new Promise((resolve) => {
           const req = tx1.objectStore(STORE_PENDING_ITEMS).clear();
@@ -558,6 +557,94 @@
         console.log('✅ Dados pendentes sincronizados removidos');
       } catch (e) {
         console.warn('Erro ao limpar dados sincronizados:', e);
+      }
+    }
+
+    // ==================== PREPARAR CACHE OFFLINE (ATUALIZAR PDF) ====================
+    async function prepararCacheOffline() {
+      if (!navigator.onLine) {
+        console.log('📡 Offline - não é possível preparar cache agora');
+        return false;
+      }
+      
+      console.log('📥 Preparando cache offline (atualizando PDF)...');
+      try {
+        const response = await fetch(MODELO_PDF_URL);
+        if (!response.ok) throw new Error('Falha ao baixar modelo');
+        const buffer = await response.arrayBuffer();
+        
+        const db = await initOfflineDB();
+        const tx = db.transaction(STORE_MODELO_PDF, 'readwrite');
+        const store = tx.objectStore(STORE_MODELO_PDF);
+        
+        await new Promise((resolve, reject) => {
+          const clearReq = store.clear();
+          clearReq.onsuccess = () => {
+            const putReq = store.put({ id: 'modelo', data: buffer });
+            putReq.onsuccess = () => resolve();
+            putReq.onerror = () => reject(putReq.error);
+          };
+          clearReq.onerror = () => reject(clearReq.error);
+        });
+        
+        await new Promise((resolve) => { tx.oncomplete = () => resolve(); });
+        
+        cachedModeloPDF = buffer;
+        await updateUserModalCacheStatus();
+        
+        console.log('✅ Cache offline atualizado com sucesso');
+        return true;
+      } catch (error) {
+        console.error('❌ Erro ao preparar cache offline:', error);
+        return false;
+      }
+    }
+
+    // ==================== ROTINA COMPLETA ONLINE ====================
+    async function rotinaCompletaOnline() {
+      if (!navigator.onLine) {
+        console.log('📡 Offline - pulando rotina online');
+        return;
+      }
+      
+      console.log('🚀 INICIANDO ROTINA COMPLETA ONLINE...');
+      const loader = document.getElementById('fullscreenLoader');
+      loader.classList.add('active');
+      
+      try {
+        // 1. Verificar e sincronizar dados pendentes
+        const pendentesItems = await getPendingItems();
+        const pendentesInsp = await getPendingInspections();
+        const totalPendentes = pendentesItems.length + pendentesInsp.length;
+        
+        if (totalPendentes > 0) {
+          console.log(`🔄 Sincronizando ${totalPendentes} itens pendentes...`);
+          showSyncStatus(`🔄 Sincronizando ${totalPendentes} itens...`);
+          await sincronizarComProgresso();
+          console.log('✅ Sincronização concluída!');
+        } else {
+          console.log('✅ Nenhum item pendente para sincronizar');
+        }
+        
+        // 2. Limpar dados já sincronizados
+        await limparDadosSincronizadosOnline();
+        console.log('✅ Dados sincronizados removidos');
+        
+        // 3. Preparar novo modo offline (atualizar PDF)
+        await prepararCacheOffline();
+        console.log('✅ Modo offline preparado');
+        
+        // 4. Recarregar dados
+        await refreshData();
+        
+        showSyncStatus('✅ Sistema sincronizado e pronto para offline!');
+        console.log('🎯 ROTINA COMPLETA FINALIZADA!');
+        
+      } catch (error) {
+        console.error('❌ Erro na rotina online:', error);
+        showSyncStatus('❌ Erro na sincronização', true);
+      } finally {
+        loader.classList.remove('active');
       }
     }
 
@@ -614,7 +701,7 @@
         
         console.log(`✅ Total de itens para exibição OFFLINE: ${items.length}`);
       } else {
-        // MODO ONLINE - sincronizar e depois limpar pendentes
+        // MODO ONLINE - buscar dados do servidor
         try {
           console.log('🌐 Buscando dados do servidor...');
           const { data: itemsData, error: itemsError } = await supabase.from('items').select('*').order('id', { ascending: true });
@@ -633,9 +720,6 @@
           } else {
             files = filesLocal;
           }
-          
-          // APÓS sincronizar, limpar pendentes
-          await limparDadosSincronizadosOnline();
           
         } catch (error) {
           console.warn('Erro ao buscar online:', error);
@@ -1010,7 +1094,7 @@
         }
       }
       
-      // FASE 2: Sincronizar inspeções pendentes (agora com os IDs dos itens já sincronizados)
+      // FASE 2: Sincronizar inspeções pendentes
       console.log('📋 FASE 2 - Sincronizando inspeções pendentes...');
       
       for (const insp of pendentesInsp) {
@@ -1068,19 +1152,8 @@
         }
       }
       
-      // Limpar pendentes após sincronização bem-sucedida
-      await limparDadosSincronizadosOnline();
-      
-      // Recarregar dados
-      await refreshData();
-      await updatePendingBadge();
-      await listarPendentesNoModal();
-      await updateUserModalCacheStatus();
-      
       const sucessos = concluidos - erros;
-      const mensagem = `✅ Sincronização concluída! ${sucessos}/${total} itens processados.${erros > 0 ? ` ${erros} erro(s).` : ''}`;
-      showSyncStatus(mensagem, erros > 0);
-      console.log(mensagem);
+      console.log(`✅ Sincronização concluída: ${sucessos}/${total} itens processados`);
       
       return { concluidos, erros };
     }
@@ -1106,7 +1179,6 @@
           console.log(`🔍 Detectados ${total} itens pendentes. Iniciando sincronização...`);
           showSyncStatus(`🔄 Sincronizando ${total} itens...`);
           await sincronizarComProgresso();
-          await refreshData();
           showSyncStatus(`✅ Sincronização concluída!`);
           return true;
         }
@@ -1155,13 +1227,13 @@
       }, 4000);
     }
 
-    // ==================== PREPARAR MODO OFFLINE ====================
+    // ==================== PREPARAR MODO OFFLINE MANUAL ====================
     async function forcarCacheModeloPDF() {
       const loader = document.getElementById('fullscreenLoader');
       loader.classList.add('active');
       
       try {
-        console.log('📥 Preparando modo offline...');
+        console.log('📥 Preparando modo offline manualmente...');
         
         const response = await fetch(MODELO_PDF_URL);
         if (!response.ok) throw new Error('Falha ao baixar modelo');
@@ -1985,22 +2057,19 @@
       console.log('🚀 Inicializando TENDEX...');
       
       await initOfflineDB();
-      
       await verificarPersistenciaDados();
       await refreshData();
       
       const modeloCacheado = await isModeloCacheado();
       if (!modeloCacheado && navigator.onLine) {
-        console.log('📥 Baixando modelo PDF...');
-        try {
-          await carregarModeloPDF();
-          await updateUserModalCacheStatus();
-        } catch(e) { console.error('Erro ao baixar modelo:', e); }
+        console.log('📥 Preparando cache offline...');
+        await prepararCacheOffline();
       }
       
+      // Executar rotina completa se estiver online
       if (navigator.onLine) {
-        console.log('🔄 Verificando pendentes para sincronizar...');
-        await verificarESincronizar();
+        console.log('🌐 Sistema online - executando rotina completa...');
+        await rotinaCompletaOnline();
       } else {
         console.log('📡 Modo offline - dados carregados do cache local');
         showSyncStatus('📡 Modo offline - dados do cache local', false);
@@ -2009,25 +2078,31 @@
       inicializacaoCompleta = true;
       console.log('✅ Inicialização concluída!');
       
+      // Verificar a cada 30 segundos
       setInterval(async () => {
         if (navigator.onLine && inicializacaoCompleta) {
-          await verificarESincronizar();
+          const pendentesItems = await getPendingItems();
+          const pendentesInsp = await getPendingInspections();
+          if (pendentesItems.length > 0 || pendentesInsp.length > 0) {
+            await rotinaCompletaOnline();
+          }
         }
       }, 30000);
     });
     
-    let syncScheduled = false;
+    // Detectar quando voltar online e executar rotina completa
+    let rotinaAgendada = false;
     window.addEventListener('online', async () => {
       if (!inicializacaoCompleta) return;
       
-      console.log('🌐 Conexão detectada! Verificando pendentes...');
-      showSyncStatus('🔄 Verificando dados pendentes...');
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      console.log('🌐 CONEXÃO DETECTADA! Executando rotina completa...');
+      showSyncStatus('🔄 Conectado! Sincronizando e preparando offline...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      if (!syncScheduled) { 
-        syncScheduled = true; 
-        await verificarESincronizar();
-        syncScheduled = false; 
+      if (!rotinaAgendada) { 
+        rotinaAgendada = true; 
+        await rotinaCompletaOnline();
+        rotinaAgendada = false; 
       }
     });
     
