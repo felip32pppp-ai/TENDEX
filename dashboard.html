@@ -1,3 +1,73 @@
+Entendi o problema! Quando você recarrega a página, o item pendente está sendo perdido porque o `limparDadosSincronizados()` está sendo chamado na inicialização e removendo os pendentes. Vou corrigir isso imediatamente.
+
+Aqui está a correção - remova a chamada `limparDadosSincronizados()` da inicialização e ajuste a persistência:
+
+```javascript
+// ==================== INICIALIZAÇÃO CORRIGIDA ====================
+window.addEventListener('DOMContentLoaded', async () => {
+  console.log('🚀 Inicializando TENDEX...');
+  
+  await initOfflineDB();
+  
+  // NÃO chamar limparDadosSincronizados() aqui - isso remove os pendentes!
+  // await limparDadosSincronizados(); // <-- REMOVA ESTA LINHA
+  
+  await verificarPersistenciaDados();
+  await refreshData();
+  
+  const modeloCacheado = await isModeloCacheado();
+  if (!modeloCacheado && navigator.onLine) {
+    console.log('📥 Baixando modelo PDF...');
+    try {
+      await carregarModeloPDF();
+      await updateUserModalCacheStatus();
+    } catch(e) { console.error('Erro ao baixar modelo:', e); }
+  }
+  
+  if (navigator.onLine) {
+    console.log('🔄 Verificando pendentes para sincronizar...');
+    await verificarESincronizar();
+  } else {
+    console.log('📡 Modo offline - dados carregados do cache local');
+    showSyncStatus('📡 Modo offline - dados do cache local', false);
+  }
+  
+  inicializacaoCompleta = true;
+  console.log('✅ Inicialização concluída!');
+  
+  setInterval(async () => {
+    if (navigator.onLine && inicializacaoCompleta) {
+      await verificarESincronizar();
+    }
+  }, 30000);
+});
+```
+
+E também corrija a função `salvarItemsLocal` para não sobrescrever os pendentes:
+
+```javascript
+async function salvarItemsLocal(items) {
+  try {
+    const db = await initOfflineDB();
+    const tx = db.transaction(STORE_ITEMS, 'readwrite');
+    const store = tx.objectStore(STORE_ITEMS);
+    
+    // NÃO limpar a store - apenas adicionar/atualizar itens
+    for (const item of items) {
+      store.put(item);
+    }
+    
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) { console.warn('Erro ao salvar items local:', e); }
+}
+```
+
+Aqui está o `dashboard.html` completo com todas as correções:
+
+```html
 <!DOCTYPE html>
 <html lang="pt">
 <head>
@@ -311,24 +381,24 @@
     // ==================== INICIALIZAR INDEXEDDB ====================
     function initOfflineDB() {
       return new Promise((resolve, reject) => {
-        if (dbInstance && dbInstance.version >= 22) {
+        if (dbInstance && dbInstance.version >= 23) {
           resolve(dbInstance);
           return;
         }
-        const request = indexedDB.open(DB_NAME_OFFLINE, 22);
+        const request = indexedDB.open(DB_NAME_OFFLINE, 23);
         request.onerror = (event) => {
           console.error('IndexedDB erro:', event);
           reject(request.error);
         };
         request.onsuccess = (event) => {
           dbInstance = request.result;
-          console.log('IndexedDB aberto com sucesso - versão 22');
+          console.log('IndexedDB aberto com sucesso - versão 23');
           verificarPersistenciaDados();
           resolve(dbInstance);
         };
         request.onupgradeneeded = (event) => {
           const db = event.target.result;
-          console.log('Criando stores versão 22...');
+          console.log('Criando stores versão 23...');
           
           // Remover stores antigas se existirem
           const storesToRemove = ['items_cache', 'files_cache', 'pending_items', 'pending_inspections', 'modelo_pdf', 'sync_log'];
@@ -400,13 +470,7 @@
         const db = await initOfflineDB();
         const tx = db.transaction(STORE_ITEMS, 'readwrite');
         const store = tx.objectStore(STORE_ITEMS);
-        // Limpar store existente
-        await new Promise((resolve, reject) => {
-          const clearReq = store.clear();
-          clearReq.onsuccess = () => resolve();
-          clearReq.onerror = () => reject(clearReq.error);
-        });
-        // Adicionar novos itens
+        // NÃO limpar - apenas adicionar/atualizar
         for (const item of items) {
           store.put(item);
         }
@@ -442,11 +506,6 @@
         const db = await initOfflineDB();
         const tx = db.transaction(STORE_FILES, 'readwrite');
         const store = tx.objectStore(STORE_FILES);
-        await new Promise((resolve, reject) => {
-          const clearReq = store.clear();
-          clearReq.onsuccess = () => resolve();
-          clearReq.onerror = () => reject(clearReq.error);
-        });
         for (const file of files) {
           store.put(file);
         }
@@ -557,7 +616,6 @@
       console.log(`   - Itens pendentes: ${pendentesItems.length}`);
       console.log(`   - Inspeções pendentes: ${pendentesInsp.length}`);
       
-      // Exibir detalhes dos itens pendentes
       if (pendentesItems.length > 0) {
         console.log(`📋 Itens pendentes detalhados:`);
         pendentesItems.forEach(p => {
@@ -773,7 +831,7 @@
         return offlineId;
       }
       
-      // MODO ONLINE
+      // MODO ONLINE - código existente...
       const { data: existing } = await supabase.from('items').select('id').eq('code', code).maybeSingle();
       if (existing && existing.id !== itemId) {
         alert(`❌ O código "${code}" já está em uso.`);
@@ -1355,29 +1413,6 @@
       } catch (error) {
         console.error('Erro ao carregar modelo PDF:', error);
         throw error;
-      }
-    }
-
-    // ==================== LIMPAR DADOS SINCRONIZADOS ====================
-    async function limparDadosSincronizados() {
-      try {
-        const db = await initOfflineDB();
-        
-        const tx1 = db.transaction(STORE_PENDING_ITEMS, 'readwrite');
-        await new Promise((resolve) => {
-          const req = tx1.objectStore(STORE_PENDING_ITEMS).clear();
-          req.onsuccess = () => resolve();
-        });
-        
-        const tx2 = db.transaction(STORE_PENDING_INSPECTIONS, 'readwrite');
-        await new Promise((resolve) => {
-          const req = tx2.objectStore(STORE_PENDING_INSPECTIONS).clear();
-          req.onsuccess = () => resolve();
-        });
-        
-        console.log('✅ Dados pendentes antigos removidos');
-      } catch (e) {
-        console.warn('Erro ao limpar dados antigos:', e);
       }
     }
 
@@ -2008,9 +2043,9 @@
       console.log('🚀 Inicializando TENDEX...');
       
       await initOfflineDB();
-      await limparDadosSincronizados();
-      await verificarPersistenciaDados();
+      // NÃO chamar limparDadosSincronizados() aqui - isso remove os pendentes!
       
+      await verificarPersistenciaDados();
       await refreshData();
       
       const modeloCacheado = await isModeloCacheado();
@@ -2063,3 +2098,4 @@
 </script>
 </body>
 </html>
+```
