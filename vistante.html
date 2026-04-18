@@ -8,7 +8,7 @@
   <link rel="icon" type="image/x-icon" href="https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/favicon.ico">
   <link rel="icon" type="image/png" sizes="192x192" href="https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/icon-180.png">
   <link rel="apple-touch-icon" sizes="180x180" href="https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/icon-180.png">
-  <!-- Biblioteca QR Code confiável (mesma do seu exemplo) -->
+  <!-- Biblioteca QR Code confiável e rápida -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
@@ -28,14 +28,14 @@
     .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.2rem; margin-top: 1rem; }
     .item-card { background: white; border-radius: 1rem; padding: 1rem; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #e2edff; position: relative; }
     .item-card:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,0.08); background: #fafcff; }
-    .item-card h3 { font-size: 1.1rem; color: #0f172a; margin-bottom: 0.3rem; padding-right: 50px; }
+    .item-card h3 { font-size: 1.1rem; color: #0f172a; margin-bottom: 0.3rem; padding-right: 55px; }
     .item-card p { font-size: 0.8rem; color: #5b6e8c; margin: 0.2rem 0; }
     .status-badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 2rem; font-size: 0.7rem; font-weight: 600; margin-top: 0.5rem; }
     .status-active { background: #d1fae5; color: #065f46; }
     .status-inactive { background: #fee2e2; color: #991b1b; }
-    .qr-code-mini { position: absolute; top: 12px; right: 12px; width: 45px; height: 45px; cursor: pointer; background: white; border-radius: 8px; padding: 4px; transition: transform 0.2s; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .qr-code-mini { position: absolute; top: 12px; right: 12px; width: 48px; height: 48px; cursor: pointer; background: white; border-radius: 8px; padding: 4px; transition: transform 0.2s; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     .qr-code-mini:hover { transform: scale(1.05); background: #f1f5f9; }
-    .qr-code-mini img, .qr-code-mini svg { width: 100% !important; height: 100% !important; }
+    .qr-code-mini img { width: 100% !important; height: 100% !important; object-fit: contain; }
     .empty-state { text-align: center; color: #6c86a3; margin-top: 3rem; }
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000; }
     .modal-content { background: white; max-width: 800px; width: 90%; border-radius: 1.5rem; padding: 1.5rem; max-height: 85vh; overflow-y: auto; }
@@ -59,20 +59,29 @@
     .offline-badge { background: #ef4444; }
     .qr-modal-content { max-width: 450px; text-align: center; }
     .qr-large { display: flex; justify-content: center; margin: 1rem 0; }
-    .qr-large img { width: 250px !important; height: 250px !important; }
+    .qr-large img { width: 280px !important; height: 280px !important; }
     .qr-actions { display: flex; gap: 1rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
     .btn-secondary { background: #64748b; color: white; border: none; padding: 0.5rem 1rem; border-radius: 2rem; cursor: pointer; font-weight: 600; }
     .btn-secondary:hover { background: #475569; }
     .btn-primary { background: #1e4a76; color: white; border: none; padding: 0.5rem 1rem; border-radius: 2rem; cursor: pointer; font-weight: 600; }
     .btn-primary:hover { background: #0f2b3d; }
-    .general-qr-section { background: linear-gradient(135deg, #e0f2fe, #f1f5f9); border-radius: 1rem; padding: 1rem; margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
-    .general-qr-left { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
-    .general-qr-code { width: 80px; height: 80px; cursor: pointer; background: white; border-radius: 12px; padding: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; }
-    .general-qr-code img { width: 100% !important; height: 100% !important; }
-    .general-qr-info h4 { margin-bottom: 0.2rem; color: #0f172a; }
-    .general-qr-info p { font-size: 0.75rem; color: #475569; }
+    .btn-success { background: #10b981; color: white; border: none; padding: 0.5rem 1rem; border-radius: 2rem; cursor: pointer; font-weight: 600; }
+    .btn-success:hover { background: #059669; }
+    .general-qr-section { background: linear-gradient(135deg, #e0f2fe, #f1f5f9); border-radius: 1rem; padding: 1.5rem; margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1.5rem; }
+    .general-qr-left { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+    .general-qr-code { width: 120px; height: 120px; cursor: pointer; background: white; border-radius: 16px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; transition: transform 0.2s; }
+    .general-qr-code:hover { transform: scale(1.02); }
+    .general-qr-code img { width: 100% !important; height: 100% !important; object-fit: contain; }
+    .general-qr-info h4 { font-size: 1.1rem; margin-bottom: 0.3rem; color: #0f172a; }
+    .general-qr-info p { font-size: 0.8rem; color: #475569; }
     .loading-spinner { text-align: center; padding: 2rem; color: #1e4a76; }
-    @media (max-width: 640px) { body { padding: 1rem; } .dashboard-header h1 { font-size: 1.2rem; } .items-grid { grid-template-columns: 1fr; } }
+    .qr-preload { display: none; }
+    @media (max-width: 640px) { 
+      body { padding: 1rem; } 
+      .dashboard-header h1 { font-size: 1.2rem; } 
+      .items-grid { grid-template-columns: 1fr; }
+      .general-qr-code { width: 90px; height: 90px; }
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -88,18 +97,18 @@
   </div>
 </div>
 
-<!-- QR Code Geral da Página -->
+<!-- QR Code Geral da Página (MAIOR) -->
 <div class="general-qr-section">
   <div class="general-qr-left">
     <div id="generalQRCode" class="general-qr-code"></div>
     <div class="general-qr-info">
       <h4>📱 QR Code Geral da Página</h4>
       <p>Escaneie para acessar a lista completa de tendas</p>
-      <p style="font-size: 0.7rem; color: #3b82f6;">Cole este QR na entrada do canteiro</p>
+      <p style="font-size: 0.75rem; color: #3b82f6; margin-top: 5px;">📍 Cole este QR na entrada do canteiro</p>
     </div>
   </div>
   <div>
-    <button id="downloadGeneralQRBtn" class="btn-secondary" style="background: #1e4a76;">💾 Baixar QR Geral</button>
+    <button id="downloadGeneralQRBtn" class="btn-success">💾 Baixar QR Geral (PNG)</button>
   </div>
 </div>
 
@@ -166,6 +175,7 @@
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
     let currentItems = [];
+    let qrCache = new Map(); // Cache para QR Codes gerados
     
     const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
     const monthKeys = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -181,91 +191,75 @@
       else loader.style.display = 'none';
     }
     
-    // ==================== FUNÇÃO DE GERAR QR CODE (USANDO QRCODE-GENERATOR) ====================
-    function generateQRCode(element, url, size = 200) {
-      if (!element) return null;
-      element.innerHTML = '';
-      
-      try {
-        // Usar a biblioteca qrcode-generator (mesma do seu exemplo)
-        const qr = qrcode(0, 'L');
-        qr.addData(url);
-        qr.make();
-        
-        // Criar imagem HTML
-        const imgTag = qr.createImgTag(size, 0);
-        
-        // Injetar no elemento
-        element.innerHTML = imgTag;
-        
-        // Retornar a imagem para possível download
-        const img = element.querySelector('img');
-        return img;
-      } catch (error) {
-        console.error('Erro ao gerar QR Code:', error);
-        element.innerHTML = '<div style="font-size:10px;color:red;">❌ Erro ao gerar QR</div>';
-        return null;
-      }
-    }
-    
-    // Função para gerar QR e retornar canvas (para download)
-    function generateQRCodeToCanvas(url, size = 250, callback) {
+    // ==================== FUNÇÃO OTIMIZADA DE GERAR QR CODE ====================
+    function generateQRCodeFast(url, size = 200) {
       try {
         const qr = qrcode(0, 'L');
         qr.addData(url);
         qr.make();
         
-        // Criar canvas a partir da imagem
+        // Criar imagem HTML diretamente
         const imgTag = qr.createImgTag(size, 0);
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = imgTag;
         const img = tempDiv.querySelector('img');
         
-        if (img) {
-          img.onload = function() {
-            const canvas = document.createElement('canvas');
-            canvas.width = size;
-            canvas.height = size;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, size, size);
-            ctx.drawImage(img, 0, 0, size, size);
-            callback(canvas);
-          };
-          // Se já estiver carregado
-          if (img.complete) {
-            img.onload();
-          }
-        } else {
-          callback(null);
-        }
+        return img;
       } catch (error) {
-        console.error('Erro:', error);
-        callback(null);
+        console.error('Erro ao gerar QR Code:', error);
+        return null;
       }
     }
     
-    // ==================== GERAR QR GERAL ====================
+    // Função para gerar QR e inserir diretamente no elemento
+    function generateAndInsertQR(element, url, size) {
+      if (!element) return null;
+      element.innerHTML = '';
+      
+      // Verificar cache
+      const cacheKey = `${url}_${size}`;
+      if (qrCache.has(cacheKey)) {
+        const cachedImg = qrCache.get(cacheKey).cloneNode(true);
+        element.appendChild(cachedImg);
+        return cachedImg;
+      }
+      
+      const img = generateQRCodeFast(url, size);
+      if (img) {
+        element.appendChild(img);
+        qrCache.set(cacheKey, img.cloneNode(true));
+        return img;
+      }
+      return null;
+    }
+    
+    // Função para converter imagem em canvas (para download)
+    function imgToCanvas(img) {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      return canvas;
+    }
+    
+    // ==================== QR GERAL (MAIOR E COM DOWNLOAD) ====================
     let generalQRImage = null;
     
     function generateGeneralQRCode() {
       const generalQrDiv = document.getElementById('generalQRCode');
       if (generalQrDiv) {
         const generalUrl = BASE_URL;
-        generalQRImage = generateQRCode(generalQrDiv, generalUrl, 80);
+        generalQRImage = generateAndInsertQR(generalQrDiv, generalUrl, 120);
         console.log('✅ QR Geral gerado:', generalUrl);
       }
     }
     
     function downloadGeneralQR() {
       if (generalQRImage) {
-        // Criar canvas a partir da imagem
-        const canvas = document.createElement('canvas');
-        canvas.width = generalQRImage.width;
-        canvas.height = generalQRImage.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(generalQRImage, 0, 0);
-        
+        const canvas = imgToCanvas(generalQRImage);
         const link = document.createElement('a');
         link.download = 'qrcode_tendex_geral.png';
         link.href = canvas.toDataURL('image/png');
@@ -280,19 +274,13 @@
       return `${BASE_URL}#item=${itemId}`;
     }
     
-    // Função para abrir modal diretamente pelo ID do item
     function openItemModalById(itemId) {
       if (!currentItems.length) {
-        // Aguardar dados carregarem
         const waitInterval = setInterval(() => {
           if (currentItems.length > 0) {
             clearInterval(waitInterval);
             const item = currentItems.find(i => String(i.id) === String(itemId));
-            if (item) {
-              openDetailModal(item.id);
-            } else {
-              console.warn('Item não encontrado:', itemId);
-            }
+            if (item) openDetailModal(item.id);
           }
         }, 100);
         setTimeout(() => clearInterval(waitInterval), 5000);
@@ -300,11 +288,7 @@
       }
       
       const item = currentItems.find(i => String(i.id) === String(itemId));
-      if (item) {
-        openDetailModal(item.id);
-      } else {
-        console.warn('Item não encontrado:', itemId);
-      }
+      if (item) openDetailModal(item.id);
     }
     
     function checkHashForItem() {
@@ -314,7 +298,6 @@
         if (itemId) {
           setTimeout(() => {
             openItemModalById(itemId);
-            // Limpar hash após abrir
             setTimeout(() => {
               if (window.location.hash === hash) {
                 window.history.replaceState({}, document.title, BASE_URL);
@@ -335,7 +318,7 @@
       const itemInfoDiv = document.getElementById('qrItemInfo');
       const itemUrl = getItemDirectUrl(item.id);
       
-      currentQRImage = generateQRCode(qrContainer, itemUrl, 250);
+      currentQRImage = generateAndInsertQR(qrContainer, itemUrl, 280);
       
       itemInfoDiv.innerHTML = `<strong>${escapeHtml(item.name)}</strong><br>TAG: ${escapeHtml(item.code)}<br><span style="font-size: 0.65rem;">Link: ${escapeHtml(itemUrl)}</span><br><span style="font-size: 0.65rem; color: #10b981;">✅ Escaneie para ver os detalhes</span>`;
       
@@ -344,14 +327,7 @@
     
     function downloadQRCode() {
       if (currentQRImage) {
-        const canvas = document.createElement('canvas');
-        canvas.width = currentQRImage.width;
-        canvas.height = currentQRImage.height;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(currentQRImage, 0, 0);
-        
+        const canvas = imgToCanvas(currentQRImage);
         const link = document.createElement('a');
         link.download = `qrcode_${currentQRItem?.code || currentQRItem?.id || 'item'}.png`;
         link.href = canvas.toDataURL('image/png');
@@ -367,14 +343,7 @@
         return;
       }
       
-      // Criar canvas para impressão
-      const canvas = document.createElement('canvas');
-      canvas.width = currentQRImage.width;
-      canvas.height = currentQRImage.height;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(currentQRImage, 0, 0);
+      const canvas = imgToCanvas(currentQRImage);
       
       const printWindow = window.open('', '_blank');
       printWindow.document.write(`
@@ -404,14 +373,28 @@
       printWindow.print();
     }
     
-    // ==================== GERAR QR MINIATURA ====================
-    function generateMiniQRForCard(cardElement, itemId, itemCode) {
-      const qrDiv = cardElement.querySelector('.qr-code-mini');
-      if (qrDiv && !qrDiv.hasAttribute('data-qr-generated')) {
-        const itemUrl = getItemDirectUrl(itemId);
-        qrDiv.setAttribute('data-qr-generated', 'true');
-        generateQRCode(qrDiv, itemUrl, 40);
+    // ==================== PRÉ-GERAR QR MINIATURAS (EM LOTE) ====================
+    async function preGenerateAllMiniQRs() {
+      console.log('🚀 Pré-gerando todos os QR Codes mini...');
+      const cards = document.querySelectorAll('.item-card');
+      
+      // Processar em lotes para não travar a UI
+      const batchSize = 5;
+      for (let i = 0; i < cards.length; i += batchSize) {
+        const batch = Array.from(cards).slice(i, i + batchSize);
+        for (const card of batch) {
+          const id = card.dataset.id;
+          const qrDiv = card.querySelector('.qr-code-mini');
+          if (qrDiv && !qrDiv.hasAttribute('data-qr-generated')) {
+            const itemUrl = getItemDirectUrl(id);
+            qrDiv.setAttribute('data-qr-generated', 'true');
+            generateAndInsertQR(qrDiv, itemUrl, 48);
+          }
+        }
+        // Pequena pausa para não bloquear
+        await new Promise(r => setTimeout(r, 10));
       }
+      console.log('✅ Todos os QR Codes mini pré-gerados!');
     }
     
     // ==================== BUSCAR DADOS ====================
@@ -513,7 +496,7 @@
                 </div>`;
       }).join('');
       
-      // Adicionar eventos e gerar QR codes
+      // Adicionar eventos
       const cards = document.querySelectorAll('.item-card');
       for (const card of cards) {
         const id = card.dataset.id;
@@ -522,8 +505,6 @@
           if (e.target.classList.contains('qr-code-mini') || e.target.closest('.qr-code-mini')) return;
           openDetailModal(id);
         });
-        
-        await generateMiniQRForCard(card, id, card.dataset.code);
         
         const qrBtn = card.querySelector('.qr-code-mini');
         if (qrBtn) {
@@ -534,6 +515,9 @@
           });
         }
       }
+      
+      // Pré-gerar todos os QR Codes mini em segundo plano
+      setTimeout(() => preGenerateAllMiniQRs(), 100);
     }
     
     // ==================== MODAL DE DETALHES ====================
@@ -650,8 +634,8 @@
       await fetchAllData();
       await renderCards('');
       checkHashForItem();
-      console.log('✅ Sistema inicializado!', currentItems.length, 'itens carregados');
-      console.log('📱 QR Codes gerados com qrcode-generator v1.4.4');
+      console.log('✅ Sistema inicializado com sucesso!', currentItems.length, 'itens carregados');
+      console.log('📱 QR Codes pré-gerados em cache para carregamento rápido');
     })();
     
   })();
