@@ -305,30 +305,31 @@
     let dbInstance = null;
     let cachedModeloPDF = null;
     let isInitialized = false;
+    let currentItems = [];
 
     const MODELO_PDF_URL = "https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/pdfs/modelo_checklist_com_campos%20(3).pdf";
 
     // ==================== INICIALIZAR INDEXEDDB ====================
     function initOfflineDB() {
       return new Promise((resolve, reject) => {
-        if (dbInstance && dbInstance.version >= 26) {
+        if (dbInstance && dbInstance.version >= 27) {
           resolve(dbInstance);
           return;
         }
-        const request = indexedDB.open(DB_NAME_OFFLINE, 26);
+        const request = indexedDB.open(DB_NAME_OFFLINE, 27);
         request.onerror = (event) => {
           console.error('IndexedDB erro:', event);
           reject(request.error);
         };
         request.onsuccess = (event) => {
           dbInstance = request.result;
-          console.log('IndexedDB aberto com sucesso - versão 26');
+          console.log('IndexedDB aberto com sucesso - versão 27');
           verificarPersistenciaDados();
           resolve(dbInstance);
         };
         request.onupgradeneeded = (event) => {
           const db = event.target.result;
-          console.log('Criando stores versão 26...');
+          console.log('Criando stores versão 27...');
           
           const storesToRemove = ['items_cache', 'files_cache', 'pending_items', 'pending_inspections', 'modelo_pdf', 'sync_log'];
           for (const store of storesToRemove) {
@@ -613,55 +614,61 @@
       console.log(`   - Itens no cache local: ${itemsLocal.length}`);
       console.log(`   - Itens pendentes: ${pendentesItems.length}`);
       
-      if (pendentesItems.length > 0) {
-        console.log(`📋 Itens pendentes detalhados:`);
-        pendentesItems.forEach(p => {
-          console.log(`   - ID: ${p.id}, Nome: ${p.name}, Código: ${p.code}`);
-        });
+      // Converter itens pendentes para o formato correto
+      const pendentesComoItens = pendentesItems.map(p => ({
+        id: p.id,
+        name: p.name,
+        sub_localizacao: p.sub_localizacao || '',
+        tamanho: p.tamanho || '',
+        code: p.code,
+        status: 'active',
+        pending: true,
+        files: [],
+        createdAt: p.timestamp || new Date().toISOString()
+      }));
+      
+      // Combinar todos os itens (itens locais + pendentes)
+      const todosItens = [...itemsLocal, ...pendentesComoItens];
+      
+      // Remover duplicatas (caso existam)
+      const uniqueItems = [];
+      const seenIds = new Set();
+      for (const item of todosItens) {
+        if (!seenIds.has(item.id)) {
+          seenIds.add(item.id);
+          uniqueItems.push(item);
+        }
       }
       
+      // Se estiver online, buscar dados do servidor e mesclar
       const isOnline = navigator.onLine && await testarConexao();
       
-      if (!isOnline) {
-        console.log('📡 Modo OFFLINE - usando apenas cache local');
-        
-        // Incluir itens pendentes na exibição
-        const pendentesComoItens = pendentesItems.map(p => ({
-          id: p.id,
-          name: p.name,
-          sub_localizacao: p.sub_localizacao || '',
-          tamanho: p.tamanho || '',
-          code: p.code,
-          status: 'active',
-          pending: true,
-          files: []
-        }));
-        
-        const todosItens = [...itemsLocal, ...pendentesComoItens];
-        const uniqueItems = [];
-        const seenIds = new Set();
-        for (const item of todosItens) {
-          if (!seenIds.has(item.id)) {
-            seenIds.add(item.id);
-            uniqueItems.push(item);
-          }
-        }
-        
-        items = uniqueItems;
-        files = filesLocal;
-        
-        console.log(`✅ Total de itens para exibição OFFLINE: ${items.length} (${itemsLocal.length} cache + ${pendentesItems.length} pendentes)`);
-      } else {
-        // MODO ONLINE - buscar dados do servidor
+      if (isOnline) {
         try {
           console.log('🌐 Buscando dados do servidor...');
           const { data: itemsData, error: itemsError } = await supabase.from('items').select('*').order('id', { ascending: true });
           if (!itemsError && itemsData) {
-            items = itemsData;
+            // Mapear códigos dos itens do servidor
+            const serverItemCodes = new Set(itemsData.map(i => i.code));
+            
+            // Filtrar pendentes que não estão no servidor
+            const pendentesNaoNoServidor = pendentesItems.filter(p => !serverItemCodes.has(p.code));
+            const pendentesComoItensFiltrados = pendentesNaoNoServidor.map(p => ({
+              id: p.id,
+              name: p.name,
+              sub_localizacao: p.sub_localizacao || '',
+              tamanho: p.tamanho || '',
+              code: p.code,
+              status: 'active',
+              pending: true,
+              files: []
+            }));
+            
+            items = [...itemsData, ...pendentesComoItensFiltrados];
             await salvarItemsLocal(items);
-            console.log(`✅ ${items.length} itens do servidor`);
+            console.log(`✅ ${items.length} itens no total (${itemsData.length} servidor + ${pendentesComoItensFiltrados.length} pendentes)`);
           } else {
-            items = itemsLocal;
+            items = uniqueItems;
           }
           
           const { data: filesData, error: filesError } = await supabase.from('files').select('*');
@@ -671,15 +678,16 @@
           } else {
             files = filesLocal;
           }
-          
-          // Após sincronizar, limpar pendentes
-          await limparDadosSincronizadosOnline();
-          
         } catch (error) {
           console.warn('Erro ao buscar online:', error);
-          items = itemsLocal;
+          items = uniqueItems;
           files = filesLocal;
         }
+      } else {
+        // OFFLINE: usar apenas itens do cache (incluindo pendentes)
+        items = uniqueItems;
+        files = filesLocal;
+        console.log(`📡 Modo OFFLINE - ${items.length} itens (${itemsLocal.length} cache + ${pendentesItems.length} pendentes)`);
       }
       
       if (!items || items.length === 0) {
@@ -687,6 +695,7 @@
         return [];
       }
       
+      // Organizar arquivos por item
       const filesByItem = {};
       if (files && files.length > 0) {
         files.forEach(file => { 
@@ -709,6 +718,10 @@
       }));
       
       console.log(`🎯 RESULTADO FINAL: ${result.length} itens para exibição (${result.filter(i => i.pending).length} pendentes)`);
+      
+      // Atualizar currentItems global
+      currentItems = result;
+      
       return result;
     }
 
@@ -1058,7 +1071,6 @@
             element.querySelector('span:last-child').innerHTML = '<span style="color: #f59e0b;">🔄 Sincronizando...</span>';
           }
           
-          // Buscar o ID real do item
           let itemIdReal = mapaIds[insp.itemInfo?.code];
           
           if (!itemIdReal) {
@@ -1128,7 +1140,6 @@
       loader.classList.add('active');
       
       try {
-        // 1. Verificar e sincronizar dados pendentes
         const pendentesItems = await getPendingItems();
         const pendentesInsp = await getPendingInspections();
         const totalPendentes = pendentesItems.length + pendentesInsp.length;
@@ -1142,15 +1153,12 @@
           console.log('✅ Nenhum item pendente para sincronizar');
         }
         
-        // 2. Limpar dados já sincronizados
         await limparDadosSincronizadosOnline();
         console.log('✅ Dados sincronizados removidos');
         
-        // 3. Preparar novo modo offline (atualizar PDF)
         await prepararCacheOffline();
         console.log('✅ Modo offline preparado');
         
-        // 4. Recarregar dados
         await refreshData();
         
         showSyncStatus('✅ Sistema sincronizado e pronto para offline!');
@@ -1406,8 +1414,7 @@
 
     // ==================== REFRESH DATA ====================
     async function refreshData() { 
-      const novosItems = await getAllItemsWithFiles();
-      currentItems = novosItems;
+      await getAllItemsWithFiles();
       renderCards(document.getElementById('searchInput').value);
       await updatePendingBadge();
       console.log(`🔄 Refresh concluído - ${currentItems.length} itens exibidos (${currentItems.filter(i => i.pending).length} pendentes)`);
@@ -1609,7 +1616,6 @@
 
     // ==================== VARIÁVEIS GLOBAIS ====================
     let currentFormItemId = null, currentFormCategory = null, currentFormMonthName = null, currentItemInfo = null;
-    let currentItems = [];
     let reactivatingItemId = null;
     window.currentDetailItem = null;
 
@@ -1649,15 +1655,63 @@
     detailModalElem.addEventListener('click', (e) => { if (e.target === detailModalElem) detailModalElem.style.display = 'none'; });
 
     async function openDetailModal(itemId) {
-      const item = currentItems.find(i => i.id == itemId);
-      if (!item) return;
+      console.log(`🔍 Abrindo detalhes do item ID: ${itemId}`);
+      
+      // Buscar o item em currentItems (que já inclui itens pendentes)
+      let item = currentItems.find(i => i.id == itemId);
+      
+      // Se não encontrou, tentar buscar diretamente do cache
+      if (!item) {
+        console.log(`Item não encontrado em currentItems, buscando no cache...`);
+        const itemsLocal = await carregarItemsLocal();
+        const pendentesItems = await getPendingItems();
+        
+        // Buscar nos itens locais
+        item = itemsLocal.find(i => i.id == itemId);
+        
+        // Se não encontrou, buscar nos pendentes
+        if (!item && pendentesItems.length > 0) {
+          const pendente = pendentesItems.find(p => p.id == itemId);
+          if (pendente) {
+            item = {
+              id: pendente.id,
+              name: pendente.name,
+              sub_localizacao: pendente.sub_localizacao || '',
+              tamanho: pendente.tamanho || '',
+              code: pendente.code,
+              status: 'active',
+              pending: true,
+              files: []
+            };
+          }
+        }
+      }
+      
+      if (!item) {
+        console.error(`❌ Item não encontrado: ${itemId}`);
+        alert('Item não encontrado. Tente recarregar a página.');
+        return;
+      }
+      
+      console.log(`✅ Item encontrado: ${item.name} (${item.code}) - Pendente: ${item.pending}`);
+      
       window.currentDetailItem = item;
       detailContent.innerHTML = '<div class="loading">Carregando...</div>';
       detailModalElem.style.display = 'flex';
-      const freshItems = await getAllItemsWithFiles();
-      const freshItem = freshItems.find(i => i.id == itemId);
-      if (!freshItem) return;
-      renderItemDetailModal(freshItem);
+      
+      // Garantir que temos os arquivos do item
+      let filesDoItem = item.files || [];
+      
+      // Se não tem arquivos, tentar buscar
+      if (filesDoItem.length === 0) {
+        const allFiles = await carregarFilesLocal();
+        filesDoItem = allFiles.filter(f => f.item_id == itemId);
+      }
+      
+      renderItemDetailModal({
+        ...item,
+        files: filesDoItem
+      });
     }
 
     function renderItemDetailModal(item) {
@@ -2051,7 +2105,6 @@
       inicializacaoCompleta = true;
       console.log('✅ Inicialização concluída!');
       
-      // Verificar a cada 30 segundos
       setInterval(async () => {
         if (navigator.onLine && inicializacaoCompleta) {
           const pendentesItems = await getPendingItems();
@@ -2063,7 +2116,6 @@
       }, 30000);
     });
     
-    // Detectar quando voltar online
     let rotinaAgendada = false;
     window.addEventListener('online', async () => {
       if (!inicializacaoCompleta) return;
