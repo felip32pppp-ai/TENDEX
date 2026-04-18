@@ -306,30 +306,31 @@
     let cachedModeloPDF = null;
     let isInitialized = false;
     let currentItems = [];
+    let currentUser = null;
 
     const MODELO_PDF_URL = "https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/pdfs/modelo_checklist_com_campos%20(3).pdf";
 
     // ==================== INICIALIZAR INDEXEDDB ====================
     function initOfflineDB() {
       return new Promise((resolve, reject) => {
-        if (dbInstance && dbInstance.version >= 28) {
+        if (dbInstance && dbInstance.version >= 29) {
           resolve(dbInstance);
           return;
         }
-        const request = indexedDB.open(DB_NAME_OFFLINE, 28);
+        const request = indexedDB.open(DB_NAME_OFFLINE, 29);
         request.onerror = (event) => {
           console.error('IndexedDB erro:', event);
           reject(request.error);
         };
         request.onsuccess = (event) => {
           dbInstance = request.result;
-          console.log('IndexedDB aberto com sucesso - versão 28');
+          console.log('IndexedDB aberto com sucesso - versão 29');
           verificarPersistenciaDados();
           resolve(dbInstance);
         };
         request.onupgradeneeded = (event) => {
           const db = event.target.result;
-          console.log('Criando stores versão 28...');
+          console.log('Criando stores versão 29...');
           
           const storesToRemove = ['items_cache', 'files_cache', 'pending_items', 'pending_inspections', 'modelo_pdf', 'sync_log'];
           for (const store of storesToRemove) {
@@ -530,6 +531,51 @@
         };
         request.onerror = () => reject(request.error);
       });
+    }
+
+    // ==================== CACHEAR ASSINATURA ====================
+    async function cachearAssinatura() {
+      if (!currentUser || !currentUser.username) return null;
+      
+      const nomeUsuario = currentUser.username.toLowerCase();
+      const assinaturaUrl = `https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/${nomeUsuario}.png`;
+      const cacheKey = `assinatura_${nomeUsuario}`;
+      
+      try {
+        // Tentar buscar do cache IndexedDB primeiro
+        const db = await initOfflineDB();
+        const tx = db.transaction(STORE_MODELO_PDF, 'readonly');
+        const store = tx.objectStore(STORE_MODELO_PDF);
+        const cached = await new Promise((resolve) => {
+          const request = store.get(cacheKey);
+          request.onsuccess = () => resolve(request.result);
+        });
+        
+        if (cached && cached.data) {
+          console.log('✅ Assinatura carregada do cache');
+          return cached.data;
+        }
+        
+        // Se não estiver em cache, buscar da rede
+        if (navigator.onLine) {
+          const response = await fetch(assinaturaUrl);
+          if (response.ok) {
+            const imageBytes = await response.arrayBuffer();
+            
+            // Salvar no cache
+            const tx2 = db.transaction(STORE_MODELO_PDF, 'readwrite');
+            const store2 = tx2.objectStore(STORE_MODELO_PDF);
+            store2.put({ id: cacheKey, data: imageBytes });
+            
+            console.log('✅ Assinatura cacheada com sucesso');
+            return imageBytes;
+          }
+        }
+      } catch (error) {
+        console.warn('Erro ao cachear assinatura:', error);
+      }
+      
+      return null;
     }
 
     // ==================== LIMPAR DADOS SINCRONIZADOS ====================
@@ -1484,6 +1530,318 @@
       await salvarFilesLocal(filteredFiles);
     }
 
+    // ==================== FUNÇÃO DE ASSINATURA CORRIGIDA ====================
+    async function adicionarInfoItemEAssinatura(pdfDoc, itemCode, itemTamanho) {
+      try {
+        const pages = pdfDoc.getPages();
+        if (pages.length === 0) return pdfDoc;
+        const pagina = pages[0];
+        const { width, height } = pagina.getSize();
+        const { StandardFonts, rgb } = window.PDFLib;
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        
+        // Posição da assinatura no canto inferior direito
+        const posX = width - 210;
+        let posY = 130;
+        
+        // Adicionar ID e Tamanho
+        pagina.drawText(`ID / TAG: ${itemCode}`, { x: posX, y: posY, size: 10, font: boldFont, color: rgb(0,0,0) });
+        posY -= 18;
+        pagina.drawText(`TAMANHO: ${itemTamanho || 'Não informado'}`, { x: posX, y: posY, size: 10, font: boldFont, color: rgb(0,0,0) });
+        posY -= 25;
+        
+        // Linha para assinatura
+        pagina.drawLine({ 
+          start: { x: posX - 10, y: posY + 8 }, 
+          end: { x: width - 30, y: posY + 8 }, 
+          thickness: 1, 
+          color: rgb(0.5, 0.5, 0.5) 
+        });
+        pagina.drawText("Assinatura do Responsável", { 
+          x: posX - 10, 
+          y: posY - 5, 
+          size: 8, 
+          font: font, 
+          color: rgb(0.5, 0.5, 0.5) 
+        });
+        
+        // Adicionar imagem da assinatura do usuário logado
+        if (currentUser && currentUser.username) {
+          const nomeUsuario = currentUser.username.toLowerCase();
+          const assinaturaUrl = `https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/${nomeUsuario}.png`;
+          
+          console.log(`🔍 Tentando carregar assinatura para: ${nomeUsuario}`);
+          
+          try {
+            // Tentar buscar do cache IndexedDB primeiro
+            const cacheKey = `assinatura_${nomeUsuario}`;
+            const db = await initOfflineDB();
+            const tx = db.transaction(STORE_MODELO_PDF, 'readonly');
+            const store = tx.objectStore(STORE_MODELO_PDF);
+            const cached = await new Promise((resolve) => {
+              const request = store.get(cacheKey);
+              request.onsuccess = () => resolve(request.result);
+            });
+            
+            let imageBytes = null;
+            
+            if (cached && cached.data) {
+              console.log('✅ Assinatura carregada do cache');
+              imageBytes = cached.data;
+            } else if (navigator.onLine) {
+              // Tentar buscar da rede
+              const response = await fetch(assinaturaUrl);
+              if (response.ok) {
+                imageBytes = await response.arrayBuffer();
+                // Salvar no cache para uso futuro
+                const tx2 = db.transaction(STORE_MODELO_PDF, 'readwrite');
+                const store2 = tx2.objectStore(STORE_MODELO_PDF);
+                store2.put({ id: cacheKey, data: imageBytes });
+                console.log('✅ Assinatura cacheada com sucesso');
+              }
+            }
+            
+            if (imageBytes) {
+              let imagem;
+              try {
+                imagem = await pdfDoc.embedPng(imageBytes);
+                console.log('✅ Assinatura carregada como PNG');
+              } catch (e) {
+                try {
+                  imagem = await pdfDoc.embedJpg(imageBytes);
+                  console.log('✅ Assinatura carregada como JPG');
+                } catch (e2) {
+                  console.warn('❌ Falha ao carregar imagem da assinatura:', e2);
+                }
+              }
+              
+              if (imagem) {
+                const areaMaxWidth = 180;
+                const areaMaxHeight = 80;
+                const scale = Math.min(areaMaxWidth / imagem.width, areaMaxHeight / imagem.height);
+                const finalW = imagem.width * scale;
+                const finalH = imagem.height * scale;
+                const imgX = width - finalW - 30;
+                const imgY = posY - finalH - 10;
+                
+                pagina.drawImage(imagem, { 
+                  x: imgX, 
+                  y: imgY, 
+                  width: finalW, 
+                  height: finalH 
+                });
+                console.log(`✅ Assinatura desenhada no PDF (${finalW}x${finalH})`);
+              }
+            } else {
+              console.warn(`⚠️ Assinatura não encontrada para usuário: ${nomeUsuario}`);
+              pagina.drawText(`(Assinatura não disponível para ${currentUser.username})`, { 
+                x: posX - 10, 
+                y: posY - 20, 
+                size: 8, 
+                font: font, 
+                color: rgb(0.8, 0.2, 0.2) 
+              });
+            }
+          } catch (error) {
+            console.error('❌ Erro ao carregar assinatura:', error);
+            pagina.drawText(`(Erro ao carregar assinatura)`, { 
+              x: posX - 10, 
+              y: posY - 20, 
+              size: 8, 
+              font: font, 
+              color: rgb(0.8, 0.2, 0.2) 
+            });
+          }
+        } else {
+          console.warn('⚠️ Nenhum usuário logado, assinatura não adicionada');
+          pagina.drawText(`(Usuário não logado)`, { 
+            x: posX - 10, 
+            y: posY - 20, 
+            size: 8, 
+            font: font, 
+            color: rgb(0.8, 0.2, 0.2) 
+          });
+        }
+        
+        return pdfDoc;
+      } catch(err) { 
+        console.error('❌ Erro em adicionarInfoItemEAssinatura:', err); 
+        return pdfDoc; 
+      }
+    }
+
+    async function gerarPDFBlob(formData, itemInfo, fotoFile) {
+      if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
+      const { PDFDocument } = window.PDFLib;
+      
+      const modelBytes = await carregarModeloPDF();
+      const pdfDoc = await PDFDocument.load(modelBytes);
+      const form = pdfDoc.getForm();
+      
+      const camposCabecalho = [
+        { nome: "unidade", valor: formData.unidade || "" },
+        { nome: "localidade", valor: formData.localidade || "" },
+        { nome: "nome", valor: formData.resp_nome || "" },
+        { nome: "matrcula", valor: formData.resp_matricula || "" },
+        { nome: "data", valor: formData.data_inspecao || "" },
+        { nome: "empresa", valor: formData.empresa || "" }
+      ];
+      
+      for (const campo of camposCabecalho) {
+        try { 
+          const textField = form.getTextField(campo.nome);
+          if (textField) textField.setText(campo.valor || '');
+        } catch(e) { console.warn(`Campo ${campo.nome} não encontrado`); }
+      }
+      
+      for (let i = 1; i <= 25; i++) {
+        const resposta = formData[`resp_${i-1}`] || "Não respondido";
+        try { 
+          const textField = form.getTextField(`${i}`);
+          if (textField) textField.setText(resposta);
+        } catch(e) { console.warn(`Campo ${i} não encontrado`); }
+      }
+      
+      await adicionarInfoItemEAssinatura(pdfDoc, itemInfo.code, itemInfo.tamanho);
+      
+      if (fotoFile) {
+        try {
+          const fotoBytes = await fotoFile.arrayBuffer();
+          let fotoImage;
+          try {
+            fotoImage = await pdfDoc.embedPng(fotoBytes);
+          } catch {
+            fotoImage = await pdfDoc.embedJpg(fotoBytes);
+          }
+          
+          if (fotoImage) {
+            const fotoMaxWidth = 300;
+            const fotoMaxHeight = 200;
+            const scale = Math.min(fotoMaxWidth / fotoImage.width, fotoMaxHeight / fotoImage.height);
+            const finalW = fotoImage.width * scale;
+            const finalH = fotoImage.height * scale;
+            const page = pdfDoc.getPages()[0];
+            page.drawImage(fotoImage, { 
+              x: 30, 
+              y: 30, 
+              width: finalW, 
+              height: finalH 
+            });
+          }
+        } catch(e) {
+          console.warn('Erro ao adicionar foto:', e);
+        }
+      }
+      
+      const pdfBytes = await pdfDoc.save();
+      return new Blob([pdfBytes], { type: 'application/pdf' });
+    }
+
+    async function generateAndAttachPdf(itemId, category, monthName, formData, itemInfo, fotoFile) {
+      const temModelo = await isModeloCacheado();
+      if (!temModelo && !navigator.onLine) {
+        alert('❌ Modo offline não disponível!\n\nO modelo PDF não está cacheado.\n\nClique no seu usuário > "Preparar Modo Offline" quando tiver internet.');
+        return;
+      }
+      
+      const isOnline = navigator.onLine && await testarConexao();
+      
+      if (!isOnline) {
+        try {
+          const loader = document.getElementById('fullscreenLoader');
+          loader.classList.add('active');
+          console.log('💾 Modo offline - iniciando salvamento local...');
+          
+          if (!temModelo) {
+            throw new Error('Modelo PDF não está cacheado para uso offline');
+          }
+          
+          const pdfBlob = await gerarPDFBlob(formData, itemInfo, fotoFile);
+          const pdfBase64 = await blobToBase64(pdfBlob);
+          let fotoBase64 = null;
+          if (fotoFile) fotoBase64 = await blobToBase64(fotoFile);
+          
+          const pendingId = `insp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          
+          const pendingData = {
+            id: pendingId,
+            type: 'inspecao',
+            itemId: itemId,
+            category: category,
+            monthName: monthName,
+            formData: formData,
+            itemInfo: {
+              code: itemInfo.code,
+              tamanho: itemInfo.tamanho,
+              name: itemInfo.name,
+              id: itemId
+            },
+            pdfBase64: pdfBase64,
+            fotoBase64: fotoBase64,
+            timestamp: new Date().toISOString()
+          };
+          await salvarInspecaoPending(pendingData);
+          
+          loader.classList.remove('active');
+          await updatePendingBadge();
+          
+          console.log(`✅ Inspeção offline salva com ID: ${pendingId}`);
+          alert('⚠️ Você está offline. O PDF foi salvo localmente e será enviado automaticamente quando a internet voltar.');
+          return;
+        } catch (error) {
+          const loader = document.getElementById('fullscreenLoader');
+          loader.classList.remove('active');
+          console.error('❌ Erro ao salvar offline:', error);
+          alert('Erro ao salvar inspeção localmente: ' + (error.message || 'Verifique o console'));
+          return;
+        }
+      }
+
+      // MODO ONLINE
+      try {
+        if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
+        const modelBytes = await carregarModeloPDF();
+        const pdfDoc = await PDFDocument.load(modelBytes);
+        const form = pdfDoc.getForm();
+        
+        const camposCabecalho = [
+          { nome: "unidade", valor: formData.unidade || "" }, { nome: "localidade", valor: formData.localidade || "" },
+          { nome: "nome", valor: formData.resp_nome || "" }, { nome: "matrcula", valor: formData.resp_matricula || "" },
+          { nome: "data", valor: formData.data_inspecao || "" }, { nome: "empresa", valor: formData.empresa || "" }
+        ];
+        for (const campo of camposCabecalho) try { form.getTextField(campo.nome).setText(campo.valor); } catch(e) {}
+        for (let i=1; i<=25; i++) { const resposta = formData[`resp_${i-1}`] || "Não respondido"; try { form.getTextField(`${i}`).setText(resposta); } catch(e) {} }
+        await adicionarInfoItemEAssinatura(pdfDoc, itemInfo.code, itemInfo.tamanho);
+        if (fotoFile) {
+          const fotoBytes = await fotoFile.arrayBuffer();
+          let fotoImage;
+          try { fotoImage = await pdfDoc.embedPng(fotoBytes); } catch { fotoImage = await pdfDoc.embedJpg(fotoBytes); }
+          if (fotoImage) {
+            const fotoMaxWidth = 300, fotoMaxHeight = 200;
+            const scale = Math.min(fotoMaxWidth / fotoImage.width, fotoMaxHeight / fotoImage.height);
+            const finalW = fotoImage.width * scale, finalH = fotoImage.height * scale;
+            const page = pdfDoc.getPages()[0];
+            page.drawImage(fotoImage, { x: 30, y: 30, width: finalW, height: finalH });
+          }
+        }
+        const pdfBytes = await pdfDoc.save();
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const file = new File([blob], `checklist_${monthName}_${Date.now()}.pdf`, { type: 'application/pdf' });
+        
+        const { data: existingFile } = await supabase.from('files').select('id, file_url').eq('item_id', itemId).eq('category', category).maybeSingle();
+        if (existingFile && existingFile.file_url) {
+          await deleteStorageFile(existingFile.file_url);
+          await supabase.from('files').delete().eq('id', existingFile.id);
+        }
+        await addFileToItem(itemId, category, file, formData.data_inspecao);
+        
+        alert(`✅ PDF gerado!\nID: ${itemInfo.code} | Tamanho: ${itemInfo.tamanho || 'N/I'}\nAssinatura: ${currentUser?.username || 'usuário'}`);
+        await refreshData();
+        await openDetailModal(itemId);
+      } catch(err) { console.error(err); alert("Erro ao gerar PDF: " + err.message); }
+    }
+
     // ==================== STATUS CONEXÃO ====================
     const connectionStatus = document.getElementById('connectionStatus');
     function updateConnectionStatus() {
@@ -1507,7 +1865,6 @@
     }
 
     // ==================== USUÁRIO ====================
-    let currentUser = null;
     try {
       const savedUser = localStorage.getItem('tendex_current_user');
       if (savedUser) currentUser = JSON.parse(savedUser);
@@ -1523,101 +1880,8 @@
       return; 
     }
 
-    // ==================== MODAL DO USUÁRIO ====================
-    const userModal = document.getElementById('userModal');
-    const closeUserModalBtn = document.getElementById('closeUserModalBtn');
-    const cancelUserModalBtn = document.getElementById('cancelUserModalBtn');
-    const userModalPrepareBtn = document.getElementById('userModalPrepareBtn');
-    const userModalSyncBtn = document.getElementById('userModalSyncBtn');
-    const userModalRecoverBtn = document.getElementById('userModalRecoverBtn');
-    const userModalClearCacheBtn = document.getElementById('userModalClearCacheBtn');
-    const userModalLogoutBtn = document.getElementById('userModalLogoutBtn');
-    const syncPendingBadge = document.getElementById('syncPendingBadge');
-
-    userInfoDisplay.addEventListener('click', async () => {
-      await updateUserModalCacheStatus();
-      await listarPendentesNoModal();
-      userModal.style.display = 'flex';
-    });
-    
-    syncPendingBadge.addEventListener('click', async () => {
-      await mostrarModalSincronizacao();
-    });
-
-    function closeUserModal() { userModal.style.display = 'none'; }
-    closeUserModalBtn.addEventListener('click', closeUserModal);
-    cancelUserModalBtn.addEventListener('click', closeUserModal);
-    userModal.addEventListener('click', (e) => { if (e.target === userModal) closeUserModal(); });
-
-    userModalPrepareBtn.addEventListener('click', async () => {
-      closeUserModal();
-      await forcarCacheModeloPDF();
-    });
-
-    userModalSyncBtn.addEventListener('click', async () => {
-      closeUserModal();
-      await mostrarModalSincronizacao();
-    });
-
-    userModalRecoverBtn.addEventListener('click', async () => {
-      closeUserModal();
-      await forcarRecuperacaoCache();
-    });
-
-    userModalClearCacheBtn.addEventListener('click', () => {
-      closeUserModal();
-      limparCacheOfflineManual();
-    });
-
-    userModalLogoutBtn.addEventListener('click', () => {
-      localStorage.removeItem('tendex_current_user');
-      window.location.href = 'index.html';
-    });
-
-    const closeSyncModalBtn = document.getElementById('closeSyncModalBtn');
-    const cancelSyncModalBtn = document.getElementById('cancelSyncModalBtn');
-    const syncModal = document.getElementById('syncModal');
-    
-    if (closeSyncModalBtn) closeSyncModalBtn.addEventListener('click', () => syncModal.style.display = 'none');
-    if (cancelSyncModalBtn) cancelSyncModalBtn.addEventListener('click', () => syncModal.style.display = 'none');
-    if (syncModal) syncModal.addEventListener('click', (e) => { if (e.target === syncModal) syncModal.style.display = 'none'; });
-
-    // ==================== CONSTANTES ====================
-    const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-    const monthKeys = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-
-    const checklistPerguntas = [
-      "[IMPEDITIVO] [Projeto] As tendas/ Galpões lonados possuem Projeto Estrutural e Anotação de Responsabilidade Técnica executado por um Engenheiro habilitado pelo CREA e está aderente?",
-      "[Projeto] As tendas/ Galpões lonados utilizados como abrigo seguro possuem Projeto de SPDA e Anotação de Responsabilidade Técnica executado por um Engenheiro habilitado pelo CREA e está vigente?",
-      "[Projeto] As tendas/ Galpões lonados utilizados para cobrir estruturas de canteiro, possuem aterramento conforme projeto do canteiro de obras?",
-      "[Projeto] O manual de instrução/ montagem do fabricante estão disponíveis na frente de serviço?",
-      "[Projeto] As tendas/ Galpões lonados, possuem a placa de liberação com data e responsável?",
-      "[Projeto] As tendas/ Galpões lonados possuem plano de inspeção e o mesmo está aderente, conforme projeto?",
-      "[Projeto] O formulário de inspeção anterior está disponível na frente de serviço?",
-      "[Inspeção] A aranha (estrutura de sustentação da lona), estão em bom estado de conservação, parafusadas com parafuso autotravante, tanto na parte superior e inferior do teto?",
-      "[Inspeção] As Cintas Poliéster estão tensionada e não apresentam deformação, fissuras ou cortes, conforme projeto?",
-      "[Inspeção] As colunas de escoramento e colunas de sustentação (pilares) estão alinhadas perpendicular (90°) as vigas e não apresentam corrosão e/ou deformação?",
-      "[Inspeção] As colunas de sustentação estão encaixadas e parafusadas às vigas e possuem mão francesa?",
-      "[Inspeção] As mãos francesas possuem parafusos autotravantes de encaixe nas vigas e pilares?",
-      "[Inspeção] As tendas/ Galpões lonados não estão montadas próximo à escavação, taludes ou pilhas de materiais onde exista risco de ser atingido em caso de deslizamento ou ruptura?",
-      "[Inspeção] As travas (parafusos cabeça sextavado, porcas sextavada, pino em L, arruela lisa, chumbadores, porca e contraporca, ou porca autotravante) apresentam sinais de corrosão ou folgas?",
-      "[Inspeção] As vigas (calha treliçada), estão alinhadas perpendicular (90°) aos pilares e não apresentam corrosão e/ou deformação?",
-      "[Inspeção] Os cabos de aço estão tensionados e possuem clips, não possuem fissuras ou corrosão, e possuem sapatilhas para fixação, conforme projeto?",
-      "[Inspeção] Todas as colunas de sustentação (pilares) possuem estaiamento com Cinta Poliéster e/ou cabo de aço conforme projeto e catraca vinculada a um Chumbador - Finca / Parabole?",
-      "[Inspeção] Todas as colunas de sustentação (pilares) possuem no mínimo 02 Chumbadores - Finca com ponto de solda na base / Parabole por pilar?",
-      "[Inspeção] A lona / Sombrite do fechamento lateral, esta em bom estado de conservação, não apresenta rasgos, furos, esta amarrada e esticada em todos os pontos de fixação conforme projeto?",
-      "[Inspeção] A lona / Sombrite do teto, esta em bom estado de conservação, não apresenta rasgos, furos, esta esticada e amarrada às vigas em todos os pontos de fixação, conforme projeto?",
-      "[Inspeção] As calhas de água de chuva e o interior dos pilares vazados estão totalmente desobstruídos?",
-      "[Inspeção] As tendas/ Galpões lonados estão montadas a uma distância segura de rede elétrica, equipamento ou árvores que ofereça risco de queda de peças e materiais?",
-      "[Inspeção] As tendas/galpões lonados utilizadas para ocupação de pessoas possuem sinalização de saída de emergência e alarme de emergência, conforme projeto?",
-      "[Inspeção] O sistema de iluminação (se aplicável), estão instalados corretamente?",
-      "[Inspeção] A lona de cobertura está sem nenhuma deformação ocasionada por acumulo de água, folhas, minério, etc.?"
-    ];
-
-    // ==================== VARIÁVEIS GLOBAIS ====================
-    let currentFormItemId = null, currentFormCategory = null, currentFormMonthName = null, currentItemInfo = null;
-    let reactivatingItemId = null;
-    window.currentDetailItem = null;
+    // Cachear assinatura na inicialização
+    cachearAssinatura();
 
     // ==================== RENDER CARDS ====================
     function renderCards(filterText = "") {
@@ -1658,21 +1922,17 @@
     detailModalElem.addEventListener('click', (e) => { if (e.target === detailModalElem) detailModalElem.style.display = 'none'; });
 
     async function openDetailModal(itemId) {
-      console.log(`🔍 Abrindo detalhes do item ID: ${itemId} (tipo: ${typeof itemId})`);
+      console.log(`🔍 Abrindo detalhes do item ID: ${itemId}`);
       
-      // Buscar o item em currentItems
       let item = currentItems.find(i => String(i.id) === String(itemId));
       
-      // Se não encontrou, tentar buscar diretamente do cache
       if (!item) {
         console.log(`Item não encontrado em currentItems, buscando no cache...`);
         const itemsLocal = await carregarItemsLocal();
         const pendentesItems = await getPendingItems();
         
-        // Buscar nos itens locais
         item = itemsLocal.find(i => String(i.id) === String(itemId));
         
-        // Se não encontrou, buscar nos pendentes
         if (!item && pendentesItems.length > 0) {
           const pendente = pendentesItems.find(p => String(p.id) === String(itemId));
           if (pendente) {
@@ -1702,10 +1962,8 @@
       detailContent.innerHTML = '<div class="loading">Carregando...</div>';
       detailModalElem.style.display = 'flex';
       
-      // Garantir que temos os arquivos do item
       let filesDoItem = item.files || [];
       
-      // Se não tem arquivos, tentar buscar
       if (filesDoItem.length === 0) {
         const allFiles = await carregarFilesLocal();
         filesDoItem = allFiles.filter(f => String(f.item_id) === String(itemId));
@@ -1844,180 +2102,6 @@
       formModal.style.display = 'flex';
     }
 
-    async function gerarPDFBlob(formData, itemInfo, fotoFile) {
-      if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
-      const { PDFDocument } = window.PDFLib;
-      const modelBytes = await carregarModeloPDF();
-      const pdfDoc = await PDFDocument.load(modelBytes);
-      const form = pdfDoc.getForm();
-      const camposCabecalho = [
-        { nome: "unidade", valor: formData.unidade || "" }, { nome: "localidade", valor: formData.localidade || "" },
-        { nome: "nome", valor: formData.resp_nome || "" }, { nome: "matrcula", valor: formData.resp_matricula || "" },
-        { nome: "data", valor: formData.data_inspecao || "" }, { nome: "empresa", valor: formData.empresa || "" }
-      ];
-      for (const campo of camposCabecalho) try { form.getTextField(campo.nome).setText(campo.valor); } catch(e) {}
-      for (let i=1; i<=25; i++) { const resposta = formData[`resp_${i-1}`] || "Não respondido"; try { form.getTextField(`${i}`).setText(resposta); } catch(e) {} }
-      await adicionarInfoItemEAssinatura(pdfDoc, itemInfo.code, itemInfo.tamanho);
-      if (fotoFile) {
-        const fotoBytes = await fotoFile.arrayBuffer();
-        let fotoImage;
-        try { fotoImage = await pdfDoc.embedPng(fotoBytes); } catch { fotoImage = await pdfDoc.embedJpg(fotoBytes); }
-        if (fotoImage) {
-          const fotoMaxWidth = 300, fotoMaxHeight = 200;
-          const scale = Math.min(fotoMaxWidth / fotoImage.width, fotoMaxHeight / fotoImage.height);
-          const finalW = fotoImage.width * scale, finalH = fotoImage.height * scale;
-          const page = pdfDoc.getPages()[0];
-          page.drawImage(fotoImage, { x: 30, y: 30, width: finalW, height: finalH });
-        }
-      }
-      const pdfBytes = await pdfDoc.save();
-      return new Blob([pdfBytes], { type: 'application/pdf' });
-    }
-
-    async function adicionarInfoItemEAssinatura(pdfDoc, itemCode, itemTamanho) {
-      try {
-        const pages = pdfDoc.getPages();
-        if (pages.length === 0) return pdfDoc;
-        const pagina = pages[0];
-        const { width, height } = pagina.getSize();
-        const { StandardFonts, rgb } = window.PDFLib;
-        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        const posX = width - 210;
-        let posY = 130;
-        pagina.drawText(`ID / TAG: ${itemCode}`, { x: posX, y: posY, size: 10, font: boldFont, color: rgb(0,0,0) });
-        posY -= 18;
-        pagina.drawText(`TAMANHO: ${itemTamanho || 'Não informado'}`, { x: posX, y: posY, size: 10, font: boldFont, color: rgb(0,0,0) });
-        posY -= 25;
-        pagina.drawLine({ start: { x: posX-10, y: posY+8 }, end: { x: width-30, y: posY+8 }, thickness: 1, color: rgb(0.5,0.5,0.5) });
-        pagina.drawText("Assinatura do Responsável", { x: posX-10, y: posY-5, size: 8, font: font, color: rgb(0.5,0.5,0.5) });
-        if (currentUser && currentUser.username) {
-          const nomeUsuario = currentUser.username.toLowerCase();
-          const assinaturaUrl = `https://jklcvyuxwxgsfczrfaco.supabase.co/storage/v1/object/public/assinaturas/${nomeUsuario}.png`;
-          try {
-            const response = await fetch(assinaturaUrl);
-            if (response.ok) {
-              const imageBytes = await response.arrayBuffer();
-              let imagem;
-              try { imagem = await pdfDoc.embedPng(imageBytes); } catch(e) { try { imagem = await pdfDoc.embedJpg(imageBytes); } catch(e2) {} }
-              if (imagem) {
-                const areaMaxWidth = 180, areaMaxHeight = 80;
-                const scale = Math.min(areaMaxWidth / imagem.width, areaMaxHeight / imagem.height);
-                const finalW = imagem.width * scale, finalH = imagem.height * scale;
-                const imgX = width - finalW - 30, imgY = posY - finalH - 10;
-                pagina.drawImage(imagem, { x: imgX, y: imgY, width: finalW, height: finalH });
-              }
-            }
-          } catch(err) { console.warn(err); }
-        }
-        return pdfDoc;
-      } catch(err) { console.warn(err); return pdfDoc; }
-    }
-
-    async function generateAndAttachPdf(itemId, category, monthName, formData, itemInfo, fotoFile) {
-      const temModelo = await isModeloCacheado();
-      if (!temModelo && !navigator.onLine) {
-        alert('❌ Modo offline não disponível!\n\nO modelo PDF não está cacheado.\n\nClique no seu usuário > "Preparar Modo Offline" quando tiver internet.');
-        return;
-      }
-      
-      const isOnline = navigator.onLine && await testarConexao();
-      
-      if (!isOnline) {
-        try {
-          const loader = document.getElementById('fullscreenLoader');
-          loader.classList.add('active');
-          console.log('💾 Modo offline - iniciando salvamento local...');
-          
-          if (!temModelo) {
-            throw new Error('Modelo PDF não está cacheado para uso offline');
-          }
-          
-          const pdfBlob = await gerarPDFBlob(formData, itemInfo, fotoFile);
-          const pdfBase64 = await blobToBase64(pdfBlob);
-          let fotoBase64 = null;
-          if (fotoFile) fotoBase64 = await blobToBase64(fotoFile);
-          
-          const pendingId = `insp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          
-          const pendingData = {
-            id: pendingId,
-            type: 'inspecao',
-            itemId: itemId,
-            category: category,
-            monthName: monthName,
-            formData: formData,
-            itemInfo: {
-              code: itemInfo.code,
-              tamanho: itemInfo.tamanho,
-              name: itemInfo.name,
-              id: itemId
-            },
-            pdfBase64: pdfBase64,
-            fotoBase64: fotoBase64,
-            timestamp: new Date().toISOString()
-          };
-          await salvarInspecaoPending(pendingData);
-          
-          loader.classList.remove('active');
-          await updatePendingBadge();
-          
-          console.log(`✅ Inspeção offline salva com ID: ${pendingId}`);
-          alert('⚠️ Você está offline. O PDF foi salvo localmente e será enviado automaticamente quando a internet voltar.');
-          return;
-        } catch (error) {
-          const loader = document.getElementById('fullscreenLoader');
-          loader.classList.remove('active');
-          console.error('❌ Erro ao salvar offline:', error);
-          alert('Erro ao salvar inspeção localmente: ' + (error.message || 'Verifique o console'));
-          return;
-        }
-      }
-
-      // MODO ONLINE
-      try {
-        if (!window.PDFLib) throw new Error("PDF-lib não carregado.");
-        const { PDFDocument } = window.PDFLib;
-        const modelBytes = await carregarModeloPDF();
-        const pdfDoc = await PDFDocument.load(modelBytes);
-        const form = pdfDoc.getForm();
-        const camposCabecalho = [
-          { nome: "unidade", valor: formData.unidade || "" }, { nome: "localidade", valor: formData.localidade || "" },
-          { nome: "nome", valor: formData.resp_nome || "" }, { nome: "matrcula", valor: formData.resp_matricula || "" },
-          { nome: "data", valor: formData.data_inspecao || "" }, { nome: "empresa", valor: formData.empresa || "" }
-        ];
-        for (const campo of camposCabecalho) try { form.getTextField(campo.nome).setText(campo.valor); } catch(e) {}
-        for (let i=1; i<=25; i++) { const resposta = formData[`resp_${i-1}`] || "Não respondido"; try { form.getTextField(`${i}`).setText(resposta); } catch(e) {} }
-        await adicionarInfoItemEAssinatura(pdfDoc, itemInfo.code, itemInfo.tamanho);
-        if (fotoFile) {
-          const fotoBytes = await fotoFile.arrayBuffer();
-          let fotoImage;
-          try { fotoImage = await pdfDoc.embedPng(fotoBytes); } catch { fotoImage = await pdfDoc.embedJpg(fotoBytes); }
-          if (fotoImage) {
-            const fotoMaxWidth = 300, fotoMaxHeight = 200;
-            const scale = Math.min(fotoMaxWidth / fotoImage.width, fotoMaxHeight / fotoImage.height);
-            const finalW = fotoImage.width * scale, finalH = fotoImage.height * scale;
-            const page = pdfDoc.getPages()[0];
-            page.drawImage(fotoImage, { x: 30, y: 30, width: finalW, height: finalH });
-          }
-        }
-        const pdfBytes = await pdfDoc.save();
-        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-        const file = new File([blob], `checklist_${monthName}_${Date.now()}.pdf`, { type: 'application/pdf' });
-        
-        const { data: existingFile } = await supabase.from('files').select('id, file_url').eq('item_id', itemId).eq('category', category).maybeSingle();
-        if (existingFile && existingFile.file_url) {
-          await deleteStorageFile(existingFile.file_url);
-          await supabase.from('files').delete().eq('id', existingFile.id);
-        }
-        await addFileToItem(itemId, category, file, formData.data_inspecao);
-        
-        alert(`✅ PDF gerado!\nID: ${itemInfo.code} | Tamanho: ${itemInfo.tamanho || 'N/I'}`);
-        await refreshData();
-        await openDetailModal(itemId);
-      } catch(err) { console.error(err); alert("Erro ao gerar PDF: " + err.message); }
-    }
-
     generatePdfBtn.addEventListener('click', async () => {
       const formData = { unidade: document.getElementById('unidade')?.value || '', localidade: document.getElementById('localidade')?.value || '', resp_nome: document.getElementById('resp_nome')?.value || '', resp_matricula: document.getElementById('resp_matricula')?.value || '', data_inspecao: document.getElementById('data_inspecao')?.value || '', empresa: document.getElementById('empresa')?.value || '' };
       for (let i=0; i<checklistPerguntas.length; i++) { const radio = document.querySelector(`input[name="resp_${i}"]:checked`); formData[`resp_${i}`] = radio ? radio.value : "Não respondido"; }
@@ -2080,7 +2164,103 @@
     document.getElementById('searchInput').addEventListener('input', (e) => renderCards(e.target.value));
     const monthContainer = document.getElementById('monthButtonsContainer');
     monthNames.forEach((month, idx) => { const btn = document.createElement('button'); btn.className = 'month-btn'; btn.textContent = month; btn.addEventListener('click', () => downloadMonthPDFs(monthKeys[idx], month)); monthContainer.appendChild(btn); });
+
+    // ==================== MODAL DO USUÁRIO ====================
+    const userModal = document.getElementById('userModal');
+    const closeUserModalBtn = document.getElementById('closeUserModalBtn');
+    const cancelUserModalBtn = document.getElementById('cancelUserModalBtn');
+    const userModalPrepareBtn = document.getElementById('userModalPrepareBtn');
+    const userModalSyncBtn = document.getElementById('userModalSyncBtn');
+    const userModalRecoverBtn = document.getElementById('userModalRecoverBtn');
+    const userModalClearCacheBtn = document.getElementById('userModalClearCacheBtn');
+    const userModalLogoutBtn = document.getElementById('userModalLogoutBtn');
+    const syncPendingBadge = document.getElementById('syncPendingBadge');
+
+    userInfoDisplay.addEventListener('click', async () => {
+      await updateUserModalCacheStatus();
+      await listarPendentesNoModal();
+      userModal.style.display = 'flex';
+    });
     
+    syncPendingBadge.addEventListener('click', async () => {
+      await mostrarModalSincronizacao();
+    });
+
+    function closeUserModal() { userModal.style.display = 'none'; }
+    closeUserModalBtn.addEventListener('click', closeUserModal);
+    cancelUserModalBtn.addEventListener('click', closeUserModal);
+    userModal.addEventListener('click', (e) => { if (e.target === userModal) closeUserModal(); });
+
+    userModalPrepareBtn.addEventListener('click', async () => {
+      closeUserModal();
+      await forcarCacheModeloPDF();
+    });
+
+    userModalSyncBtn.addEventListener('click', async () => {
+      closeUserModal();
+      await mostrarModalSincronizacao();
+    });
+
+    userModalRecoverBtn.addEventListener('click', async () => {
+      closeUserModal();
+      await forcarRecuperacaoCache();
+    });
+
+    userModalClearCacheBtn.addEventListener('click', () => {
+      closeUserModal();
+      limparCacheOfflineManual();
+    });
+
+    userModalLogoutBtn.addEventListener('click', () => {
+      localStorage.removeItem('tendex_current_user');
+      window.location.href = 'index.html';
+    });
+
+    const closeSyncModalBtn = document.getElementById('closeSyncModalBtn');
+    const cancelSyncModalBtn = document.getElementById('cancelSyncModalBtn');
+    const syncModal = document.getElementById('syncModal');
+    
+    if (closeSyncModalBtn) closeSyncModalBtn.addEventListener('click', () => syncModal.style.display = 'none');
+    if (cancelSyncModalBtn) cancelSyncModalBtn.addEventListener('click', () => syncModal.style.display = 'none');
+    if (syncModal) syncModal.addEventListener('click', (e) => { if (e.target === syncModal) syncModal.style.display = 'none'; });
+
+    // ==================== CONSTANTES ====================
+    const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+    const monthKeys = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+    const checklistPerguntas = [
+      "[IMPEDITIVO] [Projeto] As tendas/ Galpões lonados possuem Projeto Estrutural e Anotação de Responsabilidade Técnica executado por um Engenheiro habilitado pelo CREA e está aderente?",
+      "[Projeto] As tendas/ Galpões lonados utilizados como abrigo seguro possuem Projeto de SPDA e Anotação de Responsabilidade Técnica executado por um Engenheiro habilitado pelo CREA e está vigente?",
+      "[Projeto] As tendas/ Galpões lonados utilizados para cobrir estruturas de canteiro, possuem aterramento conforme projeto do canteiro de obras?",
+      "[Projeto] O manual de instrução/ montagem do fabricante estão disponíveis na frente de serviço?",
+      "[Projeto] As tendas/ Galpões lonados, possuem a placa de liberação com data e responsável?",
+      "[Projeto] As tendas/ Galpões lonados possuem plano de inspeção e o mesmo está aderente, conforme projeto?",
+      "[Projeto] O formulário de inspeção anterior está disponível na frente de serviço?",
+      "[Inspeção] A aranha (estrutura de sustentação da lona), estão em bom estado de conservação, parafusadas com parafuso autotravante, tanto na parte superior e inferior do teto?",
+      "[Inspeção] As Cintas Poliéster estão tensionada e não apresentam deformação, fissuras ou cortes, conforme projeto?",
+      "[Inspeção] As colunas de escoramento e colunas de sustentação (pilares) estão alinhadas perpendicular (90°) as vigas e não apresentam corrosão e/ou deformação?",
+      "[Inspeção] As colunas de sustentação estão encaixadas e parafusadas às vigas e possuem mão francesa?",
+      "[Inspeção] As mãos francesas possuem parafusos autotravantes de encaixe nas vigas e pilares?",
+      "[Inspeção] As tendas/ Galpões lonados não estão montadas próximo à escavação, taludes ou pilhas de materiais onde exista risco de ser atingido em caso de deslizamento ou ruptura?",
+      "[Inspeção] As travas (parafusos cabeça sextavado, porcas sextavada, pino em L, arruela lisa, chumbadores, porca e contraporca, ou porca autotravante) apresentam sinais de corrosão ou folgas?",
+      "[Inspeção] As vigas (calha treliçada), estão alinhadas perpendicular (90°) aos pilares e não apresentam corrosão e/ou deformação?",
+      "[Inspeção] Os cabos de aço estão tensionados e possuem clips, não possuem fissuras ou corrosão, e possuem sapatilhas para fixação, conforme projeto?",
+      "[Inspeção] Todas as colunas de sustentação (pilares) possuem estaiamento com Cinta Poliéster e/ou cabo de aço conforme projeto e catraca vinculada a um Chumbador - Finca / Parabole?",
+      "[Inspeção] Todas as colunas de sustentação (pilares) possuem no mínimo 02 Chumbadores - Finca com ponto de solda na base / Parabole por pilar?",
+      "[Inspeção] A lona / Sombrite do fechamento lateral, esta em bom estado de conservação, não apresenta rasgos, furos, esta amarrada e esticada em todos os pontos de fixação conforme projeto?",
+      "[Inspeção] A lona / Sombrite do teto, esta em bom estado de conservação, não apresenta rasgos, furos, esta esticada e amarrada às vigas em todos os pontos de fixação, conforme projeto?",
+      "[Inspeção] As calhas de água de chuva e o interior dos pilares vazados estão totalmente desobstruídos?",
+      "[Inspeção] As tendas/ Galpões lonados estão montadas a uma distância segura de rede elétrica, equipamento ou árvores que ofereça risco de queda de peças e materiais?",
+      "[Inspeção] As tendas/galpões lonados utilizadas para ocupação de pessoas possuem sinalização de saída de emergência e alarme de emergência, conforme projeto?",
+      "[Inspeção] O sistema de iluminação (se aplicável), estão instalados corretamente?",
+      "[Inspeção] A lona de cobertura está sem nenhuma deformação ocasionada por acumulo de água, folhas, minério, etc.?"
+    ];
+
+    // ==================== VARIÁVEIS GLOBAIS ====================
+    let currentFormItemId = null, currentFormCategory = null, currentFormMonthName = null, currentItemInfo = null;
+    let reactivatingItemId = null;
+    window.currentDetailItem = null;
+
     // ==================== INICIALIZAÇÃO ====================
     let inicializacaoCompleta = false;
     
